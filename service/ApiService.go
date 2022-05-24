@@ -24,3 +24,13 @@ func (a ApiService) Capture(ctx context.Context, captureRequest vo.CaptureReques
 	//TODO implement me
 	panic("implement me")
 }
+
+func (a ApiService) CancelPayment(ctx context.Context, captureRequest vo.CaptureRequest) (vo.TransactionResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (a ApiService) ReturnPayment(ctx context.Context, captureRequest vo.CaptureRequest) (vo.TransactionResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
