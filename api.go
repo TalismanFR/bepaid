@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 )
 
@@ -20,14 +21,27 @@ const (
 	captures       = "captures"
 )
 
-type Api struct {
-	client  *http.Client
-	baseUrl string
-	auth    string
+type Endpoint map[string]string
+
+var DefaultEndpoints = map[string]string{
+	authorizations: authorizations,
+	captures:       captures,
 }
 
-func NewApi(client *http.Client, baseUrl, username, password string) *Api {
-	return &Api{client: client, baseUrl: baseUrl, auth: base64.StdEncoding.EncodeToString([]byte(username + ":" + password))}
+type Api struct {
+	client    *http.Client
+	EndPoints Endpoint
+	baseUrl   string
+	auth      string
+}
+
+func NewApi(client *http.Client, endPoints Endpoint, baseUrl, username, password string) *Api {
+	return &Api{
+		client:    client,
+		EndPoints: endPoints,
+		baseUrl:   baseUrl,
+		auth:      base64.StdEncoding.EncodeToString([]byte(username + ":" + password)),
+	}
 }
 
 func (a *Api) Authorization(ctx context.Context, request vo.AuthorizationRequest) (*http.Response, error) {
@@ -38,24 +52,19 @@ func (a *Api) Capture(ctx context.Context, request vo.CaptureRequest) (*http.Res
 	return a.sendRequest(ctx, http.MethodPost, captures, &request)
 }
 
-//func marshalRequest(request any) (io.Reader, error) {
-//	b, err := json.Marshal(struct {
-//		Request any `json:"request"`
-//	}{request})
-//	if err != nil {
-//		return nil, err
-//	}
-//	return bytes.NewReader(b), nil
-//}
-
 func (a *Api) sendRequest(ctx context.Context, method, path string, request any) (*http.Response, error) {
 
-	body, err := json.Marshal(request)
+	reader, err := marshalRequest(request)
 	if err != nil {
 		return nil, err
 	}
+	//body, err := json.Marshal(request)
+	//if err != nil {
+	//	return nil, err
+	//}
 
-	r, err := http.NewRequestWithContext(ctx, method, a.baseUrl+path, bytes.NewReader(body))
+	//r, err := http.NewRequestWithContext(ctx, method, a.baseUrl+path, bytes.NewReader(body))
+	r, err := http.NewRequestWithContext(ctx, method, a.baseUrl+path, reader)
 	if err != nil {
 		return nil, err
 	}
@@ -68,4 +77,14 @@ func (a *Api) sendRequest(ctx context.Context, method, path string, request any)
 	}
 
 	return a.client.Do(r)
+}
+
+func marshalRequest(request any) (io.Reader, error) {
+	b, err := json.Marshal(struct {
+		Request any `json:"request"`
+	}{request})
+	if err != nil {
+		return nil, err
+	}
+	return bytes.NewReader(b), nil
 }

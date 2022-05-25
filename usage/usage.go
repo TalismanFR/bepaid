@@ -1,7 +1,9 @@
 package main
 
 import (
-	"bepaid/response"
+	"bepaid"
+	"bepaid/vo"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,42 +12,66 @@ import (
 
 func main() {
 
-	response.Parse(response.TestAuthResp1)
+	baseURL := "https://gateway.bepaid.by/transactions/"
+	shopId := ""
+	secret := ""
 
-	//baseURL := "https://gateway.bepaid.by/transactions/"
-	//shopId := ""
-	//secret := ""
-	//
-	//httpClient := &http.Client{Transport: &mockTransport{},}
-	////httpClient := http.DefaultClient
-	//
-	//api1 := bepaid.NewApi(httpClient, baseURL, shopId, secret)
-	//
-	//client1 := bepaid.NewClient(api1)
-	//
-	//_, err := client1.Capture(context.Background(), vo.CaptureRequest{ParentUid: "test1", Amount: 345, DuplicateCheck: true})
-	//if err != nil {
-	//	fmt.Println(err)
-	//}
+	httpClient := http.DefaultClient
 
-	//_, err := client1.Authorizations(context.Background(), vo.AuthorizationRequest{})
-	//if err != nil {
-	//	fmt.Println(err)
-	//}
+	api1 := bepaid.NewApi(httpClient, bepaid.DefaultEndpoints, baseURL, shopId, secret)
 
-}
+	client1 := bepaid.NewClient(api1)
 
-type mockTransport struct {
-}
-
-func (m *mockTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	fmt.Println("here")
-	ma := map[string]any{}
-	if err := json.NewDecoder(request.Body).Decode(&ma); err != nil {
+	r := vo.AuthorizationRequest{}
+	err := json.Unmarshal([]byte(Test1), &r)
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println(ma)
+	tr, err := client1.Authorizations(context.Background(), r)
+	if err != nil {
+		fmt.Println("Response")
+		fmt.Println(err)
+	}
 
-	return nil, nil
+	fmt.Println("Transaction")
+	fmt.Println(tr)
+
 }
+
+var Test1 = `
+{
+      "amount":100,
+      "currency":"USD",
+      "description":"Test transaction",
+      "tracking_id":"your_uniq_number",
+      "language":"en",
+      "test":true,
+      "billing_address":{
+         "first_name":"John",
+         "last_name":"Doe",
+         "country":"US",
+         "city":"Denver",
+         "state":"CO",
+         "zip":"96002",
+         "address":"1st Street"
+      },
+      "credit_card":{
+         "number":"4200000000000000",
+         "verification_value":"123",
+         "holder":"John Doe",
+         "exp_month":"05",
+         "exp_year":"2020"
+      },
+      "additional_data":{
+         "sub_brand":{
+            "brand": "halva",
+            "use_points": false
+         }
+      },
+      "customer":{
+         "ip":"127.0.0.1",
+         "email":"john@example.com"
+      }
+   }
+`
