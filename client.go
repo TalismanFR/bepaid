@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 )
 
-//go:generate mockgen -source=client.go -destination=mocks/mock_client.go
+//go:generate mockgen -source=client.go -destination=mocks/mock_client.go -package=mocks
 type ClientInterface interface {
 	Authorizations(ctx context.Context, authorizationRequest vo.AuthorizationRequest) (*responses.TransactionResponse, error)
 	Capture(ctx context.Context, captureRequest vo.CaptureRequest) (*responses.TransactionResponse, error)

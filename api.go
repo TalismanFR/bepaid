@@ -2,7 +2,6 @@ package bepaid
 
 import (
 	"bepaid/vo"
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -10,7 +9,7 @@ import (
 	"net/http"
 )
 
-//go:generate mockgen -source=api.go -destination=mocks/mock_api.go
+//go:generate mockgen -source=api.go -destination=mocks/mock_api.go -package=mocks
 type ApiInterface interface {
 	Authorization(ctx context.Context, request vo.AuthorizationRequest) (*http.Response, error)
 	Capture(ctx context.Context, capture vo.CaptureRequest) (*http.Response, error)
@@ -21,26 +20,17 @@ const (
 	captures       = "captures"
 )
 
-type Endpoint map[string]string
-
-var DefaultEndpoints = map[string]string{
-	authorizations: authorizations,
-	captures:       captures,
-}
-
 type Api struct {
-	client    *http.Client
-	EndPoints Endpoint
-	baseUrl   string
-	auth      string
+	client  *http.Client
+	baseUrl string
+	auth    string
 }
 
-func NewApi(client *http.Client, endPoints Endpoint, baseUrl, username, password string) *Api {
+func NewApi(client *http.Client, baseUrl, username, password string) *Api {
 	return &Api{
-		client:    client,
-		EndPoints: endPoints,
-		baseUrl:   baseUrl,
-		auth:      base64.StdEncoding.EncodeToString([]byte(username + ":" + password)),
+		client:  client,
+		baseUrl: baseUrl,
+		auth:    base64.StdEncoding.EncodeToString([]byte(username + ":" + password)),
 	}
 }
 
@@ -54,37 +44,26 @@ func (a *Api) Capture(ctx context.Context, request vo.CaptureRequest) (*http.Res
 
 func (a *Api) sendRequest(ctx context.Context, method, path string, request any) (*http.Response, error) {
 
-	reader, err := marshalRequest(request)
-	if err != nil {
-		return nil, err
-	}
-	//body, err := json.Marshal(request)
-	//if err != nil {
-	//	return nil, err
-	//}
+	r, w := io.Pipe()
+	go func() {
+		json.NewEncoder(w).Encode(struct {
+			Request any `json:"request"`
+		}{request})
+		w.Close()
+	}()
 
-	//r, err := http.NewRequestWithContext(ctx, method, a.baseUrl+path, bytes.NewReader(body))
-	r, err := http.NewRequestWithContext(ctx, method, a.baseUrl+path, reader)
+	req, err := http.NewRequestWithContext(ctx, method, a.baseUrl+path, r)
 	if err != nil {
 		return nil, err
 	}
-	r.Header.Set("Authorization", "Basic "+a.auth)
+
+	req.Header.Set("Authorization", "Basic "+a.auth)
+	req.Header.Set("Accept", "application/json")
 
 	if method == http.MethodPost {
 		//r.Header.Set("Content-Type", "application/json; charset=UTF-8")
-		r.Header.Set("Content-Type", "application/json")
-		r.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/json")
 	}
 
-	return a.client.Do(r)
-}
-
-func marshalRequest(request any) (io.Reader, error) {
-	b, err := json.Marshal(struct {
-		Request any `json:"request"`
-	}{request})
-	if err != nil {
-		return nil, err
-	}
-	return bytes.NewReader(b), nil
+	return a.client.Do(req)
 }

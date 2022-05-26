@@ -13,14 +13,6 @@ import (
 	"testing"
 )
 
-type responseBody struct {
-	io.Reader
-}
-
-func (responseBody) Close() error {
-	return nil
-}
-
 type TR = responses.TransactionResponse
 type R = responses.Response
 
@@ -40,7 +32,7 @@ func TestClient_AuthorizationsWithResponse(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			resp := &http.Response{Body: responseBody{strings.NewReader(tc.data)}}
+			resp := &http.Response{Body: io.NopCloser(strings.NewReader(tc.data))}
 
 			mockApi.EXPECT().Authorization(gomock.Any(), gomock.Any()).AnyTimes().Return(resp, nil)
 
@@ -71,7 +63,7 @@ func TestClient_AuthorizationsWithTransaction(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			resp := &http.Response{Body: responseBody{strings.NewReader(tc.data)}}
+			resp := &http.Response{Body: io.NopCloser(strings.NewReader(tc.data))}
 
 			mockApi.EXPECT().Authorization(gomock.Any(), gomock.Any()).AnyTimes().Return(resp, nil)
 

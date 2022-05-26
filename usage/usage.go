@@ -1,4 +1,4 @@
-package main
+package usage
 
 import (
 	"bepaid"
@@ -18,7 +18,7 @@ func main() {
 
 	httpClient := http.DefaultClient
 
-	api1 := bepaid.NewApi(httpClient, bepaid.DefaultEndpoints, baseURL, shopId, secret)
+	api1 := bepaid.NewApi(httpClient, baseURL, shopId, secret)
 
 	client1 := bepaid.NewClient(api1)
 
