@@ -1,5 +1,7 @@
 package responses
 
+import "time"
+
 const (
 	// Status
 	success    = "successful"
@@ -16,18 +18,21 @@ const (
 )
 
 type TransactionResponse struct {
-	Uid                string `json:"uid"`
-	Status             string `json:"status"`
-	Amount             int    `json:"amount"`
-	Message            string `json:"message"`
-	Currency           string `json:"currency"`
-	RefId              string `json:"ref_id"`
-	GatewayId          int    `json:"gateway_id"`
-	MessageTransaction string `json:"message_transaction"`
-	ParentUid          string `json:"parent_uid"`
-	ReceiptUrl         string `json:"receipt_url"`
-	Type               string `json:"type"`
-	Test               bool   `json:"test"`
+	Uid                string    `json:"uid"`
+	Status             string    `json:"status"`
+	Amount             int       `json:"amount"`
+	Message            string    `json:"message"`
+	Currency           string    `json:"currency"`
+	RefId              string    `json:"ref_id"`
+	GatewayId          int       `json:"gateway_id"`
+	MessageTransaction string    `json:"message_transaction"`
+	ParentUid          string    `json:"parent_uid"`
+	ReceiptUrl         string    `json:"receipt_url"`
+	Type               string    `json:"type"`
+	Test               bool      `json:"test"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	Reason             string    `json:"reason"`
 }
 
 func (tx *TransactionResponse) IsSuccess() bool {
