@@ -220,6 +220,26 @@ func TestApi_Payment(t *testing.T) {
 	}
 }
 
+func TestApi_StatusByTrackingId(t *testing.T) {
+	r, _ := correctApi.StatusByTrackingId(context.Background(), "mytrackingid")
+
+	defer r.Body.Close()
+	buf := bytes.Buffer{}
+	b, _ := io.ReadAll(r.Body)
+	json.Indent(&buf, b, "", "\t")
+	fmt.Println(string(buf.Bytes()))
+}
+
+func TestApi_StatusByUid(t *testing.T) {
+	r, _ := correctApi.StatusByUid(context.Background(), "151534003-9d0e9c9aa1")
+
+	defer r.Body.Close()
+	buf := bytes.Buffer{}
+	b, _ := io.ReadAll(r.Body)
+	json.Indent(&buf, b, "", "\t")
+	fmt.Println(string(buf.Bytes()))
+}
+
 //////////////////////////////////////
 //		Sequential requests			//
 //////////////////////////////////////
@@ -422,6 +442,98 @@ func TestApi_PaymentRefund(t *testing.T) {
 
 			uid = apiRefund(t, tc.refund.r, tc.refund.code, tc.refund.status)
 			t.Logf("R.Uid: %s", uid)
+		})
+	}
+}
+
+func TestApi_AuthorizationStatusByUid(t *testing.T) {
+	type (
+		Auth struct {
+			a      A
+			code   int
+			status string
+		}
+		StatusUid struct {
+			uid    string
+			code   int
+			status string
+		}
+	)
+	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+
+	tests := []struct {
+		name    string
+		auth    Auth
+		statUid StatusUid
+	}{
+		{"positiveTest1",
+			Auth{
+				*vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+				http.StatusOK,
+				"successful"},
+			StatusUid{
+				"",
+				http.StatusOK,
+				"successful",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+
+			uid := apiAuthorization(t, tc.auth.a, tc.auth.code, tc.auth.status)
+			t.Logf("A.Uid: %s", uid)
+
+			tc.statUid.uid = uid
+
+			uid = apiStatusByUid(t, tc.statUid.uid, tc.statUid.code, tc.statUid.status)
+			t.Logf("S.Uid: %s", uid)
+		})
+	}
+}
+
+func TestApi_AuthorizationStatusByTrackingId(t *testing.T) {
+	type (
+		Auth struct {
+			a      A
+			code   int
+			status string
+		}
+		StatusTrId struct {
+			trackingId string
+			code       int
+			status     string
+		}
+	)
+	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+
+	tests := []struct {
+		name       string
+		auth       Auth
+		statusTrId StatusTrId
+	}{
+		{"positiveTest1",
+			Auth{
+				*vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid5678", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+				http.StatusOK,
+				"successful"},
+			StatusTrId{
+				"mytrackingid5678",
+				http.StatusOK,
+				"successful",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+
+			uid := apiAuthorization(t, tc.auth.a, tc.auth.code, tc.auth.status)
+			t.Logf("A.Uid: %s", uid)
+
+			uid = apiStatusByTrackingId(t, tc.statusTrId.trackingId, tc.statusTrId.code, tc.statusTrId.status)
+			t.Logf("S.Uid: %s", uid)
 		})
 	}
 }
@@ -660,7 +772,98 @@ func apiVoid(t *testing.T, request vo.VoidRequest, codeExp int, statusExp string
 	return uidS
 }
 
-func getTransaction(body io.ReadCloser) (map[string]interface{}, error) {
+func apiStatusByUid(t *testing.T, parentUid string, codeExp int, statusExp string) string {
+	resp, err := correctApi.StatusByUid(context.Background(), parentUid)
+	if err != nil {
+		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
+	}
+	if resp.StatusCode != codeExp {
+		t.Fatal(sprintfExpAct("Response.StatusCode: unexpected status codeExp", codeExp, resp.StatusCode))
+	}
+
+	transaction, err := getTransaction(resp.Body)
+	if err != nil {
+		t.Fatal(sprintfExpAct("getTransaction: return non nil error", nil, err))
+	}
+
+	status, ok := transaction["status"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'status'", "key 'status' present", "no such key"))
+	}
+
+	statusS, ok := status.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'status'", "string", fmt.Sprintf("%T", status)))
+	}
+
+	if statusS != statusExp {
+		t.Fatal(sprintfExpAct("transaction: status not equal", statusExp, statusS))
+	}
+
+	uid, ok := transaction["uid"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'uid'", "key 'uid' present", "no such key"))
+	}
+
+	uidS, ok := uid.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'uid'", "string", fmt.Sprintf("%T", uid)))
+	}
+
+	return uidS
+}
+
+func apiStatusByTrackingId(t *testing.T, trackingid string, codeExp int, statusExp string) string {
+	resp, err := correctApi.StatusByTrackingId(context.Background(), trackingid)
+	if err != nil {
+		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
+	}
+	if resp.StatusCode != codeExp {
+		t.Fatal(sprintfExpAct("Response.StatusCode: unexpected status codeExp", codeExp, resp.StatusCode))
+	}
+
+	transactionArray, err := getTransactionsArray(resp.Body)
+	if err != nil {
+		t.Fatal(sprintfExpAct("getTransaction: return non nil error", nil, err))
+	}
+
+	if len(transactionArray) == 0 {
+		t.Fatal(sprintfExpAct("transactions: array is empty", "array with at least one element", "empty array"))
+	}
+
+	transaction, ok := transactionArray[0].(map[string]interface{})
+	if !ok {
+		t.Fatal(sprintfExpAct("transactions: value at index 0 isn't assertable as map[string]interface{}", "asserted", "not asserted"))
+	}
+
+	status, ok := transaction["status"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'status'", "key 'status' present", "no such key"))
+	}
+
+	statusS, ok := status.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'status'", "string", fmt.Sprintf("%T", status)))
+	}
+
+	if statusS != statusExp {
+		t.Fatal(sprintfExpAct("transaction: status not equal", statusExp, statusS))
+	}
+
+	uid, ok := transaction["uid"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'uid'", "key 'uid' present", "no such key"))
+	}
+
+	uidS, ok := uid.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'uid'", "string", fmt.Sprintf("%T", uid)))
+	}
+
+	return uidS
+}
+
+func getTransaction(body io.Reader) (map[string]interface{}, error) {
 	m := map[string]interface{}{}
 
 	err := json.NewDecoder(body).Decode(&m)
@@ -669,7 +872,7 @@ func getTransaction(body io.ReadCloser) (map[string]interface{}, error) {
 	}
 
 	if len(m) == 0 {
-		return nil, fmt.Errorf("response body length == 0")
+		return nil, fmt.Errorf("empty response body")
 	}
 
 	t, ok := m["transaction"]
@@ -680,6 +883,31 @@ func getTransaction(body io.ReadCloser) (map[string]interface{}, error) {
 	transaction, ok := t.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("'transaction' key couldn't be asserted as map[string]interface{}")
+	}
+
+	return transaction, nil
+}
+
+func getTransactionsArray(body io.ReadCloser) ([]interface{}, error) {
+	m := map[string]interface{}{}
+
+	err := json.NewDecoder(body).Decode(&m)
+	if err != nil {
+		return nil, fmt.Errorf("Decoder.Decode: err is not nil: %w", err)
+	}
+
+	if len(m) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+
+	t, ok := m["transactions"]
+	if !ok {
+		return nil, fmt.Errorf("no 'transactions' key in map")
+	}
+
+	transaction, ok := t.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("'transaction' key couldn't be asserted as []interface{}")
 	}
 
 	return transaction, nil
