@@ -3,7 +3,7 @@ package vo
 type RefundRequest struct {
 	Request struct {
 
-		//UID транзакции авторизации
+		//UID транзакции оплаты или списания средств
 		ParentUid string `json:"parent_uid"`
 
 		//сумма списания в минимальных денежных единицах, например 1000 для $10.00
