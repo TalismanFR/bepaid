@@ -5,9 +5,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/joho/godotenv"
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 )
@@ -19,17 +22,19 @@ type V = vo.VoidRequest
 type R = vo.RefundRequest
 
 var (
-	// All tests use this channel. So, no parallel testing.
+	// tests, using mockApi, read Request.Body from this channel. So, no parallel testing.
 	ch = make(chan io.ReadCloser, 1)
 
 	// testingClient sends Request.Body to ch.
 	testingClient = &http.Client{Transport: customRoundTripper{}}
 
-	// Default Api used by all tests.
-	api = Api{client: testingClient}
+	// mockApi sends Request.Body to ch.
+	// Use to check Request.Body marshalling
+	mockApi = Api{client: testingClient}
 
-	// TODO remove secrets
-	api2 = NewApi(http.DefaultClient, "https://gateway.bepaid.by", "", "")
+	// correctApi sends requests to real host and return host's response
+	// Host address, shop_id, secret retrieved from .env file in 'bepaid' directory
+	correctApi *Api
 )
 
 type customRoundTripper struct{}
@@ -38,6 +43,20 @@ func (customRoundTripper) RoundTrip(request *http.Request) (*http.Response, erro
 	ch <- request.Body
 	return nil, nil
 }
+
+func TestMain(m *testing.M) {
+	if err := godotenv.Load("../.env"); err != nil {
+		panic("cannot load .env file")
+	}
+
+	correctApi = NewApi(http.DefaultClient, os.Getenv("API_HOST"), os.Getenv("SHOP_ID"), os.Getenv("SECRET"))
+
+	m.Run()
+}
+
+//////////////////////////////////////
+//		Marshalling request body	//
+//////////////////////////////////////
 
 func TestApi_PaymentsMarshalRequest(t *testing.T) {
 
@@ -56,7 +75,7 @@ func TestApi_PaymentsMarshalRequest(t *testing.T) {
 				t,
 				tc.er,
 				func() (*http.Response, error) {
-					return api.Payment(context.TODO(), tc.req)
+					return mockApi.Payment(context.TODO(), tc.req)
 				})
 		})
 	}
@@ -79,7 +98,7 @@ func TestApi_AuthorizationsMarshalRequest(t *testing.T) {
 				t,
 				tc.er,
 				func() (*http.Response, error) {
-					return api.Authorization(context.TODO(), tc.req)
+					return mockApi.Authorization(context.TODO(), tc.req)
 				})
 		})
 	}
@@ -102,7 +121,7 @@ func TestApi_CapturesMarshalRequest(t *testing.T) {
 				t,
 				tc.er,
 				func() (*http.Response, error) {
-					return api.Capture(context.TODO(), tc.req)
+					return mockApi.Capture(context.TODO(), tc.req)
 				})
 		})
 	}
@@ -125,7 +144,7 @@ func TestApi_VoidsMarshalRequest(t *testing.T) {
 				t,
 				tc.er,
 				func() (*http.Response, error) {
-					return api.Void(context.TODO(), tc.req)
+					return mockApi.Void(context.TODO(), tc.req)
 				})
 		})
 	}
@@ -148,227 +167,522 @@ func TestApi_RefundsMarshalRequest(t *testing.T) {
 				t,
 				tc.er,
 				func() (*http.Response, error) {
-					return api.Refund(context.TODO(), tc.req)
+					return mockApi.Refund(context.TODO(), tc.req)
 				})
 		})
 	}
 }
 
-func TestApi_Payment(t *testing.T) {
-	cc := vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")
-	r := vo.NewPaymentRequest(int64(100), "RUB", "it's description", "mytrackingid", true, *cc).WithDuplicateCheck(false)
-
-	resp, err := api2.Payment(context.Background(), *r)
-	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
-	}
-
-	defer resp.Body.Close()
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		t.Logf("resp.Body: %s", string(b))
-		t.Fatalf("unexpected status code: %v", resp.StatusCode)
-	}
-	if len(b) == 0 {
-		t.Fatal("Response body length == 0")
-	}
-
-	t.Logf("resp.Body: %s", string(b))
-}
+//////////////////////////////////////
+// 			Single requests	 		//
+//////////////////////////////////////
 
 func TestApi_Authorization(t *testing.T) {
-	cc := vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")
-	r := vo.NewAuthorizationRequest(int64(100), "RUB", "it's description", "mytrackingid", true, *cc).WithDuplicateCheck(false)
-
-	resp, err := api2.Authorization(context.Background(), *r)
-	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
+	tests := []struct {
+		name   string
+		a      A
+		code   int
+		status string
+	}{
+		{"test1",
+			*vo.NewAuthorizationRequest(101, "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+			http.StatusOK,
+			"successful",
+		},
 	}
 
-	defer resp.Body.Close()
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("UID: %s", apiAuthorization(t, tc.a, tc.code, tc.status))
+		})
 	}
-
-	if resp.StatusCode != http.StatusOK {
-		t.Logf("resp.Body:\n%s", string(b))
-		t.Fatalf("unexpected status code: %v", resp.StatusCode)
-	}
-	if len(b) == 0 {
-		t.Fatal("Response body length == 0")
-	}
-
-	t.Logf("resp.Body:\n%s", string(b))
-
 }
 
+func TestApi_Payment(t *testing.T) {
+
+	tests := []struct {
+		name   string
+		p      P
+		code   int
+		status string
+	}{
+		{"test1",
+			*vo.NewPaymentRequest(int64(100), "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")).WithDuplicateCheck(false),
+			http.StatusOK,
+			"successful",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("UID: %s", apiPayment(t, tc.p, tc.code, tc.status))
+		})
+	}
+}
+
+//////////////////////////////////////
+//		Sequential requests			//
+//////////////////////////////////////
+
 func TestApi_AuthorizationCapture(t *testing.T) {
+
+	type (
+		Auth struct {
+			a      A
+			code   int
+			status string
+		}
+		Capt struct {
+			c      C
+			code   int
+			status string
+		}
+	)
 	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
 
-	cc := vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")
-	r := vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid", true, *cc)
-
-	resp, err := api2.Authorization(context.Background(), *r)
-	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
+	tests := []struct {
+		name string
+		auth Auth
+		capt Capt
+	}{
+		{"positiveTest1",
+			Auth{
+				*vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+				http.StatusOK,
+				"successful"},
+			Capt{
+				*vo.NewCaptureRequest("", amount),
+				http.StatusOK,
+				"successful"},
+		},
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("unexpected status code: %v", resp.StatusCode)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+
+			uid := apiAuthorization(t, tc.auth.a, tc.auth.code, tc.auth.status)
+			t.Logf("A.Uid: %s", uid)
+
+			tc.capt.c.Request.ParentUid = uid
+
+			uid = apiCapture(t, tc.capt.c, tc.capt.code, tc.capt.status)
+			t.Logf("C.Uid: %s", uid)
+		})
 	}
 
-	defer resp.Body.Close()
-
-	buf := bytes.Buffer{}
-	teeReader := io.TeeReader(resp.Body, &buf)
-	uid := getUid(t, teeReader)
-
-	cr := vo.NewCaptureRequest(uid, amount)
-
-	resp, err = api2.Capture(context.Background(), *cr)
-	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("unexpected status code: %v", resp.StatusCode)
-	}
-
-	defer resp.Body.Close()
-
-	buf = bytes.Buffer{}
-	teeReader = io.TeeReader(resp.Body, &buf)
-	uid = getUid(t, teeReader)
 }
 
 func TestApi_AuthorizationVoid(t *testing.T) {
+	type (
+		Auth struct {
+			a      A
+			code   int
+			status string
+		}
+		Void struct {
+			v      V
+			code   int
+			status string
+		}
+	)
 	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
 
-	cc := vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")
-	r := vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid", true, *cc)
-
-	resp, err := api2.Authorization(context.Background(), *r)
-	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
+	tests := []struct {
+		name string
+		auth Auth
+		void Void
+	}{
+		{"positiveTest1",
+			Auth{
+				*vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+				http.StatusOK,
+				"successful"},
+			Void{
+				*vo.NewVoidRequest("", amount),
+				http.StatusOK,
+				"successful"},
+		},
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("unexpected status code: %v", resp.StatusCode)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+
+			uid := apiAuthorization(t, tc.auth.a, tc.auth.code, tc.auth.status)
+			t.Logf("A.Uid: %s", uid)
+
+			tc.void.v.Request.ParentUid = uid
+
+			uid = apiVoid(t, tc.void.v, tc.void.code, tc.void.status)
+			t.Logf("V.Uid: %s", uid)
+		})
 	}
-
-	defer resp.Body.Close()
-
-	buf := bytes.Buffer{}
-	teeReader := io.TeeReader(resp.Body, &buf)
-	uid := getUid(t, teeReader)
-
-	vr := vo.NewVoidRequest(uid, amount)
-
-	resp, err = api2.Void(context.Background(), *vr)
-	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("unexpected status code: %v", resp.StatusCode)
-	}
-
-	defer resp.Body.Close()
-
-	buf = bytes.Buffer{}
-	teeReader = io.TeeReader(resp.Body, &buf)
-	uid = getUid(t, teeReader)
 }
 
 func TestApi_AuthorizationCaptureRefund(t *testing.T) {
+	type (
+		Auth struct {
+			a      A
+			code   int
+			status string
+		}
+		Capt struct {
+			c      C
+			code   int
+			status string
+		}
+		Refund struct {
+			r      R
+			code   int
+			status string
+		}
+	)
 	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
 
-	cc := vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")
-	r := vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid", true, *cc)
-
-	resp, err := api2.Authorization(context.Background(), *r)
-	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
+	tests := []struct {
+		name   string
+		auth   Auth
+		capt   Capt
+		refund Refund
+	}{
+		{"positiveTest1",
+			Auth{
+				*vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+				http.StatusOK,
+				"successful"},
+			Capt{
+				*vo.NewCaptureRequest("", amount),
+				http.StatusOK,
+				"successful"},
+			Refund{
+				*vo.NewRefundRequest("", amount, "give me my money back"),
+				http.StatusOK,
+				"successful",
+			},
+		},
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("unexpected status code: %v", resp.StatusCode)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+
+			uid := apiAuthorization(t, tc.auth.a, tc.auth.code, tc.auth.status)
+			t.Logf("A.Uid: %s", uid)
+
+			tc.capt.c.Request.ParentUid = uid
+
+			uid = apiCapture(t, tc.capt.c, tc.capt.code, tc.capt.status)
+			t.Logf("C.Uid: %s", uid)
+
+			tc.refund.r.Request.ParentUid = uid
+
+			uid = apiRefund(t, tc.refund.r, tc.refund.code, tc.refund.status)
+			t.Logf("R.Uid: %s", uid)
+		})
 	}
-
-	defer resp.Body.Close()
-
-	buf := bytes.Buffer{}
-	teeReader := io.TeeReader(resp.Body, &buf)
-	uid := getUid(t, teeReader)
-
-	cr := vo.NewCaptureRequest(uid, amount)
-
-	resp, err = api2.Capture(context.Background(), *cr)
-	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("unexpected status code: %v", resp.StatusCode)
-	}
-
-	defer resp.Body.Close()
-
-	buf = bytes.Buffer{}
-	teeReader = io.TeeReader(resp.Body, &buf)
-	uid = getUid(t, teeReader)
-
-	rr := vo.NewRefundRequest(uid, amount, "need my money back")
-
-	resp, err = api2.Refund(context.Background(), *rr)
-	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("unexpected status code: %v", resp.StatusCode)
-	}
-
-	defer resp.Body.Close()
-
-	buf = bytes.Buffer{}
-	teeReader = io.TeeReader(resp.Body, &buf)
-	uid = getUid(t, teeReader)
-
 }
 
 func TestApi_PaymentRefund(t *testing.T) {
-	r := vo.NewCaptureRequest("151281134-8d2c74c539", int64(100)).WithDuplicateCheck(false)
+	type (
+		Paym struct {
+			p      P
+			code   int
+			status string
+		}
+		Refund struct {
+			r      R
+			code   int
+			status string
+		}
+	)
+	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
 
-	resp, err := api2.Capture(context.Background(), *r)
+	tests := []struct {
+		name   string
+		paym   Paym
+		refund Refund
+	}{
+		{"positiveTest1",
+			Paym{
+				*vo.NewPaymentRequest(amount, "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+				http.StatusOK,
+				"successful"},
+			Refund{
+				*vo.NewRefundRequest("", amount, "give me my money back"),
+				http.StatusOK,
+				"successful"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+
+			uid := apiPayment(t, tc.paym.p, tc.paym.code, tc.paym.status)
+			t.Logf("A.Uid: %s", uid)
+
+			tc.refund.r.Request.ParentUid = uid
+
+			uid = apiRefund(t, tc.refund.r, tc.refund.code, tc.refund.status)
+			t.Logf("R.Uid: %s", uid)
+		})
+	}
+}
+
+//////////////////////////////////////
+//		Helper functions			//
+//////////////////////////////////////
+
+func readBody(t *testing.T, response *http.Response) *bytes.Buffer {
+	buf := &bytes.Buffer{}
+	_, err := io.Copy(buf, response.Body)
+	checkError(t, err)
+	return buf
+}
+
+func logResponse(t *testing.T, response *http.Response) {
+	b, err := io.ReadAll(response.Body)
 	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
+		fatalfWithExpectedActual(t, "io.ReadAll error", nil, err)
 	}
+	t.Logf("Headers: %v", response.Header)
+	t.Logf("StatusCode: %d", response.StatusCode)
+	t.Logf("Status: %s", response.Status)
+	t.Logf("Body: %s", string(b))
 
-	defer resp.Body.Close()
+}
 
-	b, err := io.ReadAll(resp.Body)
+func checkError(t *testing.T, err error) {
 	if err != nil {
-		t.Fatalf("err is not nil: %v", err)
+		fatalfWithExpectedActual(t, "err is not nil", nil, err)
+	}
+}
+
+func apiPayment(t *testing.T, request vo.PaymentRequest, codeExp int, statusExp string) string {
+	resp, err := correctApi.Payment(context.Background(), request)
+	if err != nil {
+		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
+	}
+	if resp.StatusCode != codeExp {
+		t.Fatal(sprintfExpAct("Response.StatusCode: unexpected status codeExp", codeExp, resp.StatusCode))
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		t.Logf("resp.Body:\n%s", string(b))
-		t.Fatalf("unexpected status code: %v", resp.StatusCode)
-	}
-	if len(b) == 0 {
-		t.Fatal("Response body length == 0")
+	transaction, err := getTransaction(resp.Body)
+	if err != nil {
+		t.Fatal(sprintfExpAct("getTransaction: return non nil error", nil, err))
 	}
 
-	t.Logf("resp.Body:\n%s", string(b))
+	status, ok := transaction["status"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'status'", "key 'status' present", "no such key"))
+	}
 
+	statusS, ok := status.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'status'", "string", fmt.Sprintf("%T", status)))
+	}
+
+	if statusS != statusExp {
+		t.Fatal(sprintfExpAct("transaction: status not equal", statusExp, statusS))
+	}
+
+	uid, ok := transaction["uid"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'uid'", "key 'uid' present", "no such key"))
+	}
+
+	uidS, ok := uid.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'uid'", "string", fmt.Sprintf("%T", uid)))
+	}
+
+	return uidS
+}
+
+func apiAuthorization(t *testing.T, request vo.AuthorizationRequest, codeExp int, statusExp string) string {
+	resp, err := correctApi.Authorization(context.Background(), request)
+	if err != nil {
+		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
+	}
+	if resp.StatusCode != codeExp {
+		t.Fatal(sprintfExpAct("Response.StatusCode: unexpected status codeExp", codeExp, resp.StatusCode))
+	}
+
+	transaction, err := getTransaction(resp.Body)
+	if err != nil {
+		t.Fatal(sprintfExpAct("getTransaction: return non nil error", nil, err))
+	}
+
+	status, ok := transaction["status"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'status'", "key 'status' present", "no such key"))
+	}
+
+	statusS, ok := status.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'status'", "string", fmt.Sprintf("%T", status)))
+	}
+
+	if statusS != statusExp {
+		t.Fatal(sprintfExpAct("transaction: status not equal", statusExp, statusS))
+	}
+
+	uid, ok := transaction["uid"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'uid'", "key 'uid' present", "no such key"))
+	}
+
+	uidS, ok := uid.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'uid'", "string", fmt.Sprintf("%T", uid)))
+	}
+
+	return uidS
+}
+
+func apiCapture(t *testing.T, request vo.CaptureRequest, codeExp int, statusExp string) string {
+	resp, err := correctApi.Capture(context.Background(), request)
+	if err != nil {
+		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
+	}
+	if resp.StatusCode != codeExp {
+		t.Fatal(sprintfExpAct("Response.StatusCode: unexpected status codeExp", codeExp, resp.StatusCode))
+	}
+
+	transaction, err := getTransaction(resp.Body)
+	if err != nil {
+		t.Fatal(sprintfExpAct("getTransaction: return non nil error", nil, err))
+	}
+
+	status, ok := transaction["status"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'status'", "key 'status' present", "no such key"))
+	}
+
+	statusS, ok := status.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'status'", "string", fmt.Sprintf("%T", status)))
+	}
+
+	if statusS != statusExp {
+		t.Fatal(sprintfExpAct("transaction: status not equal", statusExp, statusS))
+	}
+
+	uid, ok := transaction["uid"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'uid'", "key 'uid' present", "no such key"))
+	}
+
+	uidS, ok := uid.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'uid'", "string", fmt.Sprintf("%T", uid)))
+	}
+
+	return uidS
+}
+
+func apiRefund(t *testing.T, request vo.RefundRequest, codeExp int, statusExp string) string {
+	resp, err := correctApi.Refund(context.Background(), request)
+	if err != nil {
+		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
+	}
+	if resp.StatusCode != codeExp {
+		t.Fatal(sprintfExpAct("Response.StatusCode: unexpected status codeExp", codeExp, resp.StatusCode))
+	}
+
+	transaction, err := getTransaction(resp.Body)
+	if err != nil {
+		t.Fatal(sprintfExpAct("getTransaction: return non nil error", nil, err))
+	}
+
+	status, ok := transaction["status"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'status'", "key 'status' present", "no such key"))
+	}
+
+	statusS, ok := status.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'status'", "string", fmt.Sprintf("%T", status)))
+	}
+
+	if statusS != statusExp {
+		t.Fatal(sprintfExpAct("transaction: status not equal", statusExp, statusS))
+	}
+
+	uid, ok := transaction["uid"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'uid'", "key 'uid' present", "no such key"))
+	}
+
+	uidS, ok := uid.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'uid'", "string", fmt.Sprintf("%T", uid)))
+	}
+
+	return uidS
+}
+
+func apiVoid(t *testing.T, request vo.VoidRequest, codeExp int, statusExp string) string {
+	resp, err := correctApi.Void(context.Background(), request)
+	if err != nil {
+		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
+	}
+	if resp.StatusCode != codeExp {
+		t.Fatal(sprintfExpAct("Response.StatusCode: unexpected status codeExp", codeExp, resp.StatusCode))
+	}
+
+	transaction, err := getTransaction(resp.Body)
+	if err != nil {
+		t.Fatal(sprintfExpAct("getTransaction: return non nil error", nil, err))
+	}
+
+	status, ok := transaction["status"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'status'", "key 'status' present", "no such key"))
+	}
+
+	statusS, ok := status.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'status'", "string", fmt.Sprintf("%T", status)))
+	}
+
+	if statusS != statusExp {
+		t.Fatal(sprintfExpAct("transaction: status not equal", statusExp, statusS))
+	}
+
+	uid, ok := transaction["uid"]
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: map doesn't contain key 'uid'", "key 'uid' present", "no such key"))
+	}
+
+	uidS, ok := uid.(string)
+	if !ok {
+		t.Fatal(sprintfExpAct("transaction: not a string value in key 'uid'", "string", fmt.Sprintf("%T", uid)))
+	}
+
+	return uidS
+}
+
+func getTransaction(body io.ReadCloser) (map[string]interface{}, error) {
+	m := map[string]interface{}{}
+
+	err := json.NewDecoder(body).Decode(&m)
+	if err != nil {
+		return nil, fmt.Errorf("Decoder.Decode: err is not nil: %w", err)
+	}
+
+	if len(m) == 0 {
+		return nil, fmt.Errorf("response body length == 0")
+	}
+
+	t, ok := m["transaction"]
+	if !ok {
+		return nil, fmt.Errorf("no 'transaction' key in map")
+	}
+
+	transaction, ok := t.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("'transaction' key couldn't be asserted as map[string]interface{}")
+	}
+
+	return transaction, nil
 }
 
 func testMarshallRequest(t *testing.T, er string, startRequest func() (*http.Response, error)) {
@@ -393,32 +707,36 @@ func fatalfWithExpectedActual(t *testing.T, msg string, er, ar interface{}) {
 	t.Fatalf("%s:\nER: %v,\nAR: %v", msg, er, ar)
 }
 
-func getUid(t *testing.T, body io.Reader) string {
+func sprintfExpAct(msg string, er, ar interface{}) string {
+	return fmt.Sprintf("%s:\nExp: %v,\nAct: %v", msg, er, ar)
+}
+
+func getUid(body io.Reader) (string, error) {
 	m := map[string]interface{}{}
 
 	err := json.NewDecoder(body).Decode(&m)
 	if err != nil {
-		t.Fatalf("Decoder.Decode: err is not nil: %v", err)
+		return "", fmt.Errorf("Decoder.Decode: err is not nil: %w", err)
 	}
 
 	if len(m) == 0 {
-		t.Fatal("Response body length == 0")
+		return "", fmt.Errorf("response body length == 0")
 	}
 
 	transactionMap, ok := m["transaction"]
 	if !ok {
-		t.Fatal("No 'transaction' key in map")
+		return "", fmt.Errorf("no 'transaction' key in map")
 	}
 
 	uid, ok := transactionMap.(map[string]interface{})["uid"]
 	if !ok {
-		t.Fatal("No 'uid' key in transactionMap")
+		return "", fmt.Errorf("no 'uid' key in transactionMap")
 	}
 
 	uidS, ok := uid.(string)
 	if !ok {
-		t.Fatal("Value in 'uid' key is not a string")
+		return "", fmt.Errorf("value in 'uid' key is not a string")
 	}
 
-	return uidS
+	return uidS, nil
 }
