@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/joho/godotenv"
+	"github.com/stretchr/testify/suite"
 	"io"
 	"math/rand"
 	"net/http"
@@ -24,8 +25,11 @@ type R = vo.RefundRequest
 
 var (
 
-	// correctApi sends requests to real host and return host's response
-	// Host address, shop_id, secret retrieved from .env file in 'bepaid' directory
+	// correctApi sends requests to real host and return host's response.
+	//
+	// correctApi initialised in TestMain method.
+	//
+	// Host address, shop_id, secret retrieved from .env file in 'bepaid' directory.
 	correctApi *Api
 )
 
@@ -39,54 +43,29 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func TestApiRequestMarshalling(t *testing.T) {
-	s1 := MarshalRequestTestSuite{}
-	s1.Setup()
-	s1.Run(t)
+func TestMarshalling(t *testing.T) {
+	s := MarshalRequestTestSuite{}
+	api := &Api{client: s.GetHttpClient()}
+	s.Setup(api)
+	s.Run(t)
+	s.TearDown()
+}
+
+func TestSingleRequests(t *testing.T) {
+	s := &SingleRequestSuite{}
+	s.Setup(correctApi)
+	suite.Run(t, s)
+}
+
+func TestSequentialRequests(t *testing.T) {
+	s := &SequentialRequestsTestSuite{}
+	s.Setup(correctApi)
+	suite.Run(t, s)
 }
 
 //////////////////////////////////////
-//		Marshalling request body	//
+//	Marshalling request body suite	//
 //////////////////////////////////////
-
-type MarshalRequestTestSuite struct {
-	ch  chan io.ReadCloser
-	api contracts.Api
-}
-
-func (s *MarshalRequestTestSuite) Setup() {
-	// tests, using mockApi, read Request.Body from this channel. So, no parallel testing.
-	s.ch = make(chan io.ReadCloser, 1)
-
-	// testingClient sends Request.Body to ch.
-	testingClient := &http.Client{Transport: &customRoundTripper{s.ch}}
-
-	// mockApi sends Request.Body to ch.
-	// Use to check Request.Body marshalling
-	s.api = &Api{client: testingClient}
-}
-
-func (s *MarshalRequestTestSuite) TearDown() {
-
-}
-
-func (s *MarshalRequestTestSuite) Run(t *testing.T) {
-	t.Run("Payment", func(t *testing.T) {
-		s.TestApi_PaymentMarshalRequest(t)
-	})
-	t.Run("Authorization", func(t *testing.T) {
-		s.TestApi_AuthorizationMarshalRequest(t)
-	})
-	t.Run("Capture", func(t *testing.T) {
-		s.TestApi_CaptureMarshalRequest(t)
-	})
-	t.Run("Void", func(t *testing.T) {
-		s.TestApi_VoidMarshalRequest(t)
-	})
-	t.Run("Refund", func(t *testing.T) {
-		s.TestApi_RefundMarshalRequest(t)
-	})
-}
 
 type customRoundTripper struct {
 	ch chan io.ReadCloser
@@ -97,7 +76,56 @@ func (c *customRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 	return nil, nil
 }
 
-func (s *MarshalRequestTestSuite) TestApi_PaymentMarshalRequest(t *testing.T) {
+type MarshalRequestTestSuite struct {
+	ch  chan io.ReadCloser
+	api contracts.Api
+}
+
+// GetHttpClient return http.Client, that should be inserted in the implementation of contracts.Api
+//
+// Then use Setup to insert instance of that implementation.
+func (s *MarshalRequestTestSuite) GetHttpClient() *http.Client {
+	// tests, using mockApi, read Request.Body from this channel. So, no parallel testing.
+	s.ch = make(chan io.ReadCloser, 1)
+
+	// testingClient sends Request.Body to ch.
+	testingClient := &http.Client{Transport: &customRoundTripper{s.ch}}
+
+	// mockApi sends Request.Body to ch.
+	// Use to check Request.Body marshalling
+	return testingClient
+}
+
+func (s *MarshalRequestTestSuite) Setup(api contracts.Api) {
+	s.api = api
+}
+
+func (s *MarshalRequestTestSuite) TearDown() {
+	close(s.ch)
+}
+
+func (s *MarshalRequestTestSuite) Run(t *testing.T) {
+	if s.api == nil {
+		panic("api value is nil. Run Setup first.")
+	}
+	t.Run("Payment", func(t *testing.T) {
+		s.Payment(t)
+	})
+	t.Run("Authorization", func(t *testing.T) {
+		s.Authorization(t)
+	})
+	t.Run("Capture", func(t *testing.T) {
+		s.Capture(t)
+	})
+	t.Run("Void", func(t *testing.T) {
+		s.Void(t)
+	})
+	t.Run("Refund", func(t *testing.T) {
+		s.Refund(t)
+	})
+}
+
+func (s *MarshalRequestTestSuite) Payment(t *testing.T) {
 
 	tests := []struct {
 		name string
@@ -121,7 +149,7 @@ func (s *MarshalRequestTestSuite) TestApi_PaymentMarshalRequest(t *testing.T) {
 	}
 }
 
-func (s *MarshalRequestTestSuite) TestApi_AuthorizationMarshalRequest(t *testing.T) {
+func (s *MarshalRequestTestSuite) Authorization(t *testing.T) {
 
 	tests := []struct {
 		name string
@@ -145,7 +173,7 @@ func (s *MarshalRequestTestSuite) TestApi_AuthorizationMarshalRequest(t *testing
 	}
 }
 
-func (s *MarshalRequestTestSuite) TestApi_CaptureMarshalRequest(t *testing.T) {
+func (s *MarshalRequestTestSuite) Capture(t *testing.T) {
 
 	tests := []struct {
 		name string
@@ -169,7 +197,7 @@ func (s *MarshalRequestTestSuite) TestApi_CaptureMarshalRequest(t *testing.T) {
 	}
 }
 
-func (s *MarshalRequestTestSuite) TestApi_VoidMarshalRequest(t *testing.T) {
+func (s *MarshalRequestTestSuite) Void(t *testing.T) {
 
 	tests := []struct {
 		name string
@@ -193,7 +221,7 @@ func (s *MarshalRequestTestSuite) TestApi_VoidMarshalRequest(t *testing.T) {
 	}
 }
 
-func (s *MarshalRequestTestSuite) TestApi_RefundMarshalRequest(t *testing.T) {
+func (s *MarshalRequestTestSuite) Refund(t *testing.T) {
 
 	tests := []struct {
 		name string
@@ -236,10 +264,19 @@ func testMarshallRequest(t *testing.T, ch chan io.ReadCloser, er string, startRe
 }
 
 //////////////////////////////////////
-// 			Single requests	 		//
+// 		Single requests	 suite		//
 //////////////////////////////////////
 
-func TestApi_Authorization(t *testing.T) {
+type SingleRequestSuite struct {
+	suite.Suite
+	api contracts.Api
+}
+
+func (s *SingleRequestSuite) Setup(api contracts.Api) {
+	s.api = api
+}
+
+func (s *SingleRequestSuite) TestApi_Authorization() {
 	tests := []struct {
 		name   string
 		a      A
@@ -254,13 +291,13 @@ func TestApi_Authorization(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Logf("UID: %s", apiAuthorization(t, correctApi, tc.a, tc.code, tc.status))
+		s.Run(tc.name, func() {
+			s.T().Logf("UID: %s", apiAuthorization(s.T(), s.api, tc.a, tc.code, tc.status))
 		})
 	}
 }
 
-func TestApi_Payment(t *testing.T) {
+func (s *SingleRequestSuite) TestApi_Payment() {
 
 	tests := []struct {
 		name   string
@@ -276,37 +313,44 @@ func TestApi_Payment(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Logf("UID: %s", apiPayment(t, correctApi, tc.p, tc.code, tc.status))
+		s.Run(tc.name, func() {
+			s.T().Logf("UID: %s", apiPayment(s.T(), s.api, tc.p, tc.code, tc.status))
 		})
 	}
 }
 
-func TestApi_StatusByTrackingId(t *testing.T) {
-	r, _ := correctApi.StatusByTrackingId(context.Background(), "mytrackingid")
+func (s *SingleRequestSuite) TestApi_StatusByTrackingId() {
+	r, _ := s.api.StatusByTrackingId(context.Background(), "mytrackingid")
 
 	defer r.Body.Close()
 	buf := bytes.Buffer{}
 	b, _ := io.ReadAll(r.Body)
 	json.Indent(&buf, b, "", "\t")
-	fmt.Println(string(buf.Bytes()))
 }
 
-func TestApi_StatusByUid(t *testing.T) {
-	r, _ := correctApi.StatusByUid(context.Background(), "151534003-9d0e9c9aa1")
+func (s *SingleRequestSuite) TestApi_StatusByUid() {
+	r, _ := s.api.StatusByUid(context.Background(), "151534003-9d0e9c9aa1")
 
 	defer r.Body.Close()
 	buf := bytes.Buffer{}
 	b, _ := io.ReadAll(r.Body)
 	json.Indent(&buf, b, "", "\t")
-	fmt.Println(string(buf.Bytes()))
 }
 
 //////////////////////////////////////
-//		Sequential requests			//
+//		Sequential requests	suite	//
 //////////////////////////////////////
 
-func TestApi_AuthorizationCapture(t *testing.T) {
+type SequentialRequestsTestSuite struct {
+	suite.Suite
+	api contracts.Api
+}
+
+func (s *SequentialRequestsTestSuite) Setup(api contracts.Api) {
+	s.api = api
+}
+
+func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCapture() {
 
 	type (
 		Auth struct {
@@ -340,21 +384,21 @@ func TestApi_AuthorizationCapture(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+		s.Run(tc.name, func() {
 
-			uid := apiAuthorization(t, correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
-			t.Logf("A.Uid: %s", uid)
+			uid := apiAuthorization(s.T(), correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
+			s.T().Logf("A.Uid: %s", uid)
 
 			tc.capt.c.Request.ParentUid = uid
 
-			uid = apiCapture(t, correctApi, tc.capt.c, tc.capt.code, tc.capt.status)
-			t.Logf("C.Uid: %s", uid)
+			uid = apiCapture(s.T(), correctApi, tc.capt.c, tc.capt.code, tc.capt.status)
+			s.T().Logf("C.Uid: %s", uid)
 		})
 	}
 
 }
 
-func TestApi_AuthorizationVoid(t *testing.T) {
+func (s *SequentialRequestsTestSuite) TestApi_AuthorizationVoid() {
 	type (
 		Auth struct {
 			a      A
@@ -387,20 +431,20 @@ func TestApi_AuthorizationVoid(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+		s.Run(tc.name, func() {
 
-			uid := apiAuthorization(t, correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
-			t.Logf("A.Uid: %s", uid)
+			uid := apiAuthorization(s.T(), correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
+			s.T().Logf("A.Uid: %s", uid)
 
 			tc.void.v.Request.ParentUid = uid
 
-			uid = apiVoid(t, correctApi, tc.void.v, tc.void.code, tc.void.status)
-			t.Logf("V.Uid: %s", uid)
+			uid = apiVoid(s.T(), correctApi, tc.void.v, tc.void.code, tc.void.status)
+			s.T().Logf("V.Uid: %s", uid)
 		})
 	}
 }
 
-func TestApi_AuthorizationCaptureRefund(t *testing.T) {
+func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCaptureRefund() {
 	type (
 		Auth struct {
 			a      A
@@ -444,25 +488,25 @@ func TestApi_AuthorizationCaptureRefund(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+		s.Run(tc.name, func() {
 
-			uid := apiAuthorization(t, correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
-			t.Logf("A.Uid: %s", uid)
+			uid := apiAuthorization(s.T(), correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
+			s.T().Logf("A.Uid: %s", uid)
 
 			tc.capt.c.Request.ParentUid = uid
 
-			uid = apiCapture(t, correctApi, tc.capt.c, tc.capt.code, tc.capt.status)
-			t.Logf("C.Uid: %s", uid)
+			uid = apiCapture(s.T(), correctApi, tc.capt.c, tc.capt.code, tc.capt.status)
+			s.T().Logf("C.Uid: %s", uid)
 
 			tc.refund.r.Request.ParentUid = uid
 
-			uid = apiRefund(t, correctApi, tc.refund.r, tc.refund.code, tc.refund.status)
-			t.Logf("R.Uid: %s", uid)
+			uid = apiRefund(s.T(), correctApi, tc.refund.r, tc.refund.code, tc.refund.status)
+			s.T().Logf("R.Uid: %s", uid)
 		})
 	}
 }
 
-func TestApi_PaymentRefund(t *testing.T) {
+func (s *SequentialRequestsTestSuite) TestApi_PaymentRefund() {
 	type (
 		Paym struct {
 			p      P
@@ -495,20 +539,20 @@ func TestApi_PaymentRefund(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+		s.Run(tc.name, func() {
 
-			uid := apiPayment(t, correctApi, tc.paym.p, tc.paym.code, tc.paym.status)
-			t.Logf("A.Uid: %s", uid)
+			uid := apiPayment(s.T(), correctApi, tc.paym.p, tc.paym.code, tc.paym.status)
+			s.T().Logf("A.Uid: %s", uid)
 
 			tc.refund.r.Request.ParentUid = uid
 
-			uid = apiRefund(t, correctApi, tc.refund.r, tc.refund.code, tc.refund.status)
-			t.Logf("R.Uid: %s", uid)
+			uid = apiRefund(s.T(), correctApi, tc.refund.r, tc.refund.code, tc.refund.status)
+			s.T().Logf("R.Uid: %s", uid)
 		})
 	}
 }
 
-func TestApi_AuthorizationStatusByUid(t *testing.T) {
+func (s *SequentialRequestsTestSuite) TestApi_AuthorizationStatusByUid() {
 	type (
 		Auth struct {
 			a      A
@@ -542,20 +586,20 @@ func TestApi_AuthorizationStatusByUid(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+		s.Run(tc.name, func() {
 
-			uid := apiAuthorization(t, correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
-			t.Logf("A.Uid: %s", uid)
+			uid := apiAuthorization(s.T(), correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
+			s.T().Logf("A.Uid: %s", uid)
 
 			tc.statUid.uid = uid
 
-			uid = apiStatusByUid(t, correctApi, tc.statUid.uid, tc.statUid.code, tc.statUid.status)
-			t.Logf("S.Uid: %s", uid)
+			uid = apiStatusByUid(s.T(), correctApi, tc.statUid.uid, tc.statUid.code, tc.statUid.status)
+			s.T().Logf("S.Uid: %s", uid)
 		})
 	}
 }
 
-func TestApi_AuthorizationStatusByTrackingId(t *testing.T) {
+func (s *SequentialRequestsTestSuite) TestApi_AuthorizationStatusByTrackingId() {
 	type (
 		Auth struct {
 			a      A
@@ -589,13 +633,13 @@ func TestApi_AuthorizationStatusByTrackingId(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+		s.Run(tc.name, func() {
 
-			uid := apiAuthorization(t, correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
-			t.Logf("A.Uid: %s", uid)
+			uid := apiAuthorization(s.T(), correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
+			s.T().Logf("A.Uid: %s", uid)
 
-			uid = apiStatusByTrackingId(t, correctApi, tc.statusTrId.trackingId, tc.statusTrId.code, tc.statusTrId.status)
-			t.Logf("S.Uid: %s", uid)
+			uid = apiStatusByTrackingId(s.T(), correctApi, tc.statusTrId.trackingId, tc.statusTrId.code, tc.statusTrId.status)
+			s.T().Logf("S.Uid: %s", uid)
 		})
 	}
 }
@@ -603,31 +647,6 @@ func TestApi_AuthorizationStatusByTrackingId(t *testing.T) {
 //////////////////////////////////////
 //		Helper functions			//
 //////////////////////////////////////
-
-func readBody(t *testing.T, response *http.Response) *bytes.Buffer {
-	buf := &bytes.Buffer{}
-	_, err := io.Copy(buf, response.Body)
-	checkError(t, err)
-	return buf
-}
-
-func logResponse(t *testing.T, response *http.Response) {
-	b, err := io.ReadAll(response.Body)
-	if err != nil {
-		fatalfWithExpectedActual(t, "io.ReadAll error", nil, err)
-	}
-	t.Logf("Headers: %v", response.Header)
-	t.Logf("StatusCode: %d", response.StatusCode)
-	t.Logf("Status: %s", response.Status)
-	t.Logf("Body: %s", string(b))
-
-}
-
-func checkError(t *testing.T, err error) {
-	if err != nil {
-		fatalfWithExpectedActual(t, "err is not nil", nil, err)
-	}
-}
 
 func apiPayment(t *testing.T, api contracts.Api, request vo.PaymentRequest, codeExp int, statusExp string) string {
 	resp, err := api.Payment(context.Background(), request)
@@ -1011,4 +1030,29 @@ func getUid(body io.Reader) (string, error) {
 	}
 
 	return uidS, nil
+}
+
+func readBody(t *testing.T, response *http.Response) *bytes.Buffer {
+	buf := &bytes.Buffer{}
+	_, err := io.Copy(buf, response.Body)
+	checkError(t, err)
+	return buf
+}
+
+func logResponse(t *testing.T, response *http.Response) {
+	b, err := io.ReadAll(response.Body)
+	if err != nil {
+		fatalfWithExpectedActual(t, "io.ReadAll error", nil, err)
+	}
+	t.Logf("Headers: %v", response.Header)
+	t.Logf("StatusCode: %d", response.StatusCode)
+	t.Logf("Status: %s", response.Status)
+	t.Logf("Body: %s", string(b))
+
+}
+
+func checkError(t *testing.T, err error) {
+	if err != nil {
+		fatalfWithExpectedActual(t, "err is not nil", nil, err)
+	}
 }
