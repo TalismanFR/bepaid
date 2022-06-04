@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bepaid-sdk/api/contracts"
 	"bepaid-sdk/service/vo"
 	"bytes"
 	"context"
@@ -22,27 +23,11 @@ type V = vo.VoidRequest
 type R = vo.RefundRequest
 
 var (
-	// tests, using mockApi, read Request.Body from this channel. So, no parallel testing.
-	ch = make(chan io.ReadCloser, 1)
-
-	// testingClient sends Request.Body to ch.
-	testingClient = &http.Client{Transport: customRoundTripper{}}
-
-	// mockApi sends Request.Body to ch.
-	// Use to check Request.Body marshalling
-	mockApi = Api{client: testingClient}
 
 	// correctApi sends requests to real host and return host's response
 	// Host address, shop_id, secret retrieved from .env file in 'bepaid' directory
 	correctApi *Api
 )
-
-type customRoundTripper struct{}
-
-func (customRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	ch <- request.Body
-	return nil, nil
-}
 
 func TestMain(m *testing.M) {
 	if err := godotenv.Load("../.env"); err != nil {
@@ -54,11 +39,65 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
+func TestApiRequestMarshalling(t *testing.T) {
+	s1 := MarshalRequestTestSuite{}
+	s1.Setup()
+	s1.Run(t)
+}
+
 //////////////////////////////////////
 //		Marshalling request body	//
 //////////////////////////////////////
 
-func TestApi_PaymentsMarshalRequest(t *testing.T) {
+type MarshalRequestTestSuite struct {
+	ch  chan io.ReadCloser
+	api contracts.Api
+}
+
+func (s *MarshalRequestTestSuite) Setup() {
+	// tests, using mockApi, read Request.Body from this channel. So, no parallel testing.
+	s.ch = make(chan io.ReadCloser, 1)
+
+	// testingClient sends Request.Body to ch.
+	testingClient := &http.Client{Transport: &customRoundTripper{s.ch}}
+
+	// mockApi sends Request.Body to ch.
+	// Use to check Request.Body marshalling
+	s.api = &Api{client: testingClient}
+}
+
+func (s *MarshalRequestTestSuite) TearDown() {
+
+}
+
+func (s *MarshalRequestTestSuite) Run(t *testing.T) {
+	t.Run("Payment", func(t *testing.T) {
+		s.TestApi_PaymentMarshalRequest(t)
+	})
+	t.Run("Authorization", func(t *testing.T) {
+		s.TestApi_AuthorizationMarshalRequest(t)
+	})
+	t.Run("Capture", func(t *testing.T) {
+		s.TestApi_CaptureMarshalRequest(t)
+	})
+	t.Run("Void", func(t *testing.T) {
+		s.TestApi_VoidMarshalRequest(t)
+	})
+	t.Run("Refund", func(t *testing.T) {
+		s.TestApi_RefundMarshalRequest(t)
+	})
+}
+
+type customRoundTripper struct {
+	ch chan io.ReadCloser
+}
+
+func (c *customRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	c.ch <- request.Body
+	return nil, nil
+}
+
+func (s *MarshalRequestTestSuite) TestApi_PaymentMarshalRequest(t *testing.T) {
 
 	tests := []struct {
 		name string
@@ -73,15 +112,16 @@ func TestApi_PaymentsMarshalRequest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			testMarshallRequest(
 				t,
+				s.ch,
 				tc.er,
 				func() (*http.Response, error) {
-					return mockApi.Payment(context.TODO(), tc.req)
+					return s.api.Payment(context.TODO(), tc.req)
 				})
 		})
 	}
 }
 
-func TestApi_AuthorizationsMarshalRequest(t *testing.T) {
+func (s *MarshalRequestTestSuite) TestApi_AuthorizationMarshalRequest(t *testing.T) {
 
 	tests := []struct {
 		name string
@@ -96,15 +136,16 @@ func TestApi_AuthorizationsMarshalRequest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			testMarshallRequest(
 				t,
+				s.ch,
 				tc.er,
 				func() (*http.Response, error) {
-					return mockApi.Authorization(context.TODO(), tc.req)
+					return s.api.Authorization(context.TODO(), tc.req)
 				})
 		})
 	}
 }
 
-func TestApi_CapturesMarshalRequest(t *testing.T) {
+func (s *MarshalRequestTestSuite) TestApi_CaptureMarshalRequest(t *testing.T) {
 
 	tests := []struct {
 		name string
@@ -119,15 +160,16 @@ func TestApi_CapturesMarshalRequest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			testMarshallRequest(
 				t,
+				s.ch,
 				tc.er,
 				func() (*http.Response, error) {
-					return mockApi.Capture(context.TODO(), tc.req)
+					return s.api.Capture(context.TODO(), tc.req)
 				})
 		})
 	}
 }
 
-func TestApi_VoidsMarshalRequest(t *testing.T) {
+func (s *MarshalRequestTestSuite) TestApi_VoidMarshalRequest(t *testing.T) {
 
 	tests := []struct {
 		name string
@@ -142,15 +184,16 @@ func TestApi_VoidsMarshalRequest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			testMarshallRequest(
 				t,
+				s.ch,
 				tc.er,
 				func() (*http.Response, error) {
-					return mockApi.Void(context.TODO(), tc.req)
+					return s.api.Void(context.TODO(), tc.req)
 				})
 		})
 	}
 }
 
-func TestApi_RefundsMarshalRequest(t *testing.T) {
+func (s *MarshalRequestTestSuite) TestApi_RefundMarshalRequest(t *testing.T) {
 
 	tests := []struct {
 		name string
@@ -165,11 +208,30 @@ func TestApi_RefundsMarshalRequest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			testMarshallRequest(
 				t,
+				s.ch,
 				tc.er,
 				func() (*http.Response, error) {
-					return mockApi.Refund(context.TODO(), tc.req)
+					return s.api.Refund(context.TODO(), tc.req)
 				})
 		})
+	}
+}
+
+func testMarshallRequest(t *testing.T, ch chan io.ReadCloser, er string, startRequest func() (*http.Response, error)) {
+	// ignore response and error
+	go startRequest()
+
+	body := <-ch
+	defer body.Close()
+
+	b, err := io.ReadAll(body)
+
+	if err != nil {
+		fatalfWithExpectedActual(t, "ReadAll returned not nil value", nil, err)
+	}
+
+	if string(b) != er {
+		fatalfWithExpectedActual(t, "Strings aren't equal", er, string(b))
 	}
 }
 
@@ -193,7 +255,7 @@ func TestApi_Authorization(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Logf("UID: %s", apiAuthorization(t, tc.a, tc.code, tc.status))
+			t.Logf("UID: %s", apiAuthorization(t, correctApi, tc.a, tc.code, tc.status))
 		})
 	}
 }
@@ -215,7 +277,7 @@ func TestApi_Payment(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Logf("UID: %s", apiPayment(t, tc.p, tc.code, tc.status))
+			t.Logf("UID: %s", apiPayment(t, correctApi, tc.p, tc.code, tc.status))
 		})
 	}
 }
@@ -280,12 +342,12 @@ func TestApi_AuthorizationCapture(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 
-			uid := apiAuthorization(t, tc.auth.a, tc.auth.code, tc.auth.status)
+			uid := apiAuthorization(t, correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
 			t.Logf("A.Uid: %s", uid)
 
 			tc.capt.c.Request.ParentUid = uid
 
-			uid = apiCapture(t, tc.capt.c, tc.capt.code, tc.capt.status)
+			uid = apiCapture(t, correctApi, tc.capt.c, tc.capt.code, tc.capt.status)
 			t.Logf("C.Uid: %s", uid)
 		})
 	}
@@ -327,12 +389,12 @@ func TestApi_AuthorizationVoid(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 
-			uid := apiAuthorization(t, tc.auth.a, tc.auth.code, tc.auth.status)
+			uid := apiAuthorization(t, correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
 			t.Logf("A.Uid: %s", uid)
 
 			tc.void.v.Request.ParentUid = uid
 
-			uid = apiVoid(t, tc.void.v, tc.void.code, tc.void.status)
+			uid = apiVoid(t, correctApi, tc.void.v, tc.void.code, tc.void.status)
 			t.Logf("V.Uid: %s", uid)
 		})
 	}
@@ -384,17 +446,17 @@ func TestApi_AuthorizationCaptureRefund(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 
-			uid := apiAuthorization(t, tc.auth.a, tc.auth.code, tc.auth.status)
+			uid := apiAuthorization(t, correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
 			t.Logf("A.Uid: %s", uid)
 
 			tc.capt.c.Request.ParentUid = uid
 
-			uid = apiCapture(t, tc.capt.c, tc.capt.code, tc.capt.status)
+			uid = apiCapture(t, correctApi, tc.capt.c, tc.capt.code, tc.capt.status)
 			t.Logf("C.Uid: %s", uid)
 
 			tc.refund.r.Request.ParentUid = uid
 
-			uid = apiRefund(t, tc.refund.r, tc.refund.code, tc.refund.status)
+			uid = apiRefund(t, correctApi, tc.refund.r, tc.refund.code, tc.refund.status)
 			t.Logf("R.Uid: %s", uid)
 		})
 	}
@@ -435,12 +497,12 @@ func TestApi_PaymentRefund(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 
-			uid := apiPayment(t, tc.paym.p, tc.paym.code, tc.paym.status)
+			uid := apiPayment(t, correctApi, tc.paym.p, tc.paym.code, tc.paym.status)
 			t.Logf("A.Uid: %s", uid)
 
 			tc.refund.r.Request.ParentUid = uid
 
-			uid = apiRefund(t, tc.refund.r, tc.refund.code, tc.refund.status)
+			uid = apiRefund(t, correctApi, tc.refund.r, tc.refund.code, tc.refund.status)
 			t.Logf("R.Uid: %s", uid)
 		})
 	}
@@ -482,12 +544,12 @@ func TestApi_AuthorizationStatusByUid(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 
-			uid := apiAuthorization(t, tc.auth.a, tc.auth.code, tc.auth.status)
+			uid := apiAuthorization(t, correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
 			t.Logf("A.Uid: %s", uid)
 
 			tc.statUid.uid = uid
 
-			uid = apiStatusByUid(t, tc.statUid.uid, tc.statUid.code, tc.statUid.status)
+			uid = apiStatusByUid(t, correctApi, tc.statUid.uid, tc.statUid.code, tc.statUid.status)
 			t.Logf("S.Uid: %s", uid)
 		})
 	}
@@ -529,10 +591,10 @@ func TestApi_AuthorizationStatusByTrackingId(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 
-			uid := apiAuthorization(t, tc.auth.a, tc.auth.code, tc.auth.status)
+			uid := apiAuthorization(t, correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
 			t.Logf("A.Uid: %s", uid)
 
-			uid = apiStatusByTrackingId(t, tc.statusTrId.trackingId, tc.statusTrId.code, tc.statusTrId.status)
+			uid = apiStatusByTrackingId(t, correctApi, tc.statusTrId.trackingId, tc.statusTrId.code, tc.statusTrId.status)
 			t.Logf("S.Uid: %s", uid)
 		})
 	}
@@ -567,8 +629,8 @@ func checkError(t *testing.T, err error) {
 	}
 }
 
-func apiPayment(t *testing.T, request vo.PaymentRequest, codeExp int, statusExp string) string {
-	resp, err := correctApi.Payment(context.Background(), request)
+func apiPayment(t *testing.T, api contracts.Api, request vo.PaymentRequest, codeExp int, statusExp string) string {
+	resp, err := api.Payment(context.Background(), request)
 	if err != nil {
 		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
 	}
@@ -608,8 +670,8 @@ func apiPayment(t *testing.T, request vo.PaymentRequest, codeExp int, statusExp 
 	return uidS
 }
 
-func apiAuthorization(t *testing.T, request vo.AuthorizationRequest, codeExp int, statusExp string) string {
-	resp, err := correctApi.Authorization(context.Background(), request)
+func apiAuthorization(t *testing.T, api contracts.Api, request vo.AuthorizationRequest, codeExp int, statusExp string) string {
+	resp, err := api.Authorization(context.Background(), request)
 	if err != nil {
 		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
 	}
@@ -649,8 +711,8 @@ func apiAuthorization(t *testing.T, request vo.AuthorizationRequest, codeExp int
 	return uidS
 }
 
-func apiCapture(t *testing.T, request vo.CaptureRequest, codeExp int, statusExp string) string {
-	resp, err := correctApi.Capture(context.Background(), request)
+func apiCapture(t *testing.T, api contracts.Api, request vo.CaptureRequest, codeExp int, statusExp string) string {
+	resp, err := api.Capture(context.Background(), request)
 	if err != nil {
 		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
 	}
@@ -690,8 +752,8 @@ func apiCapture(t *testing.T, request vo.CaptureRequest, codeExp int, statusExp 
 	return uidS
 }
 
-func apiRefund(t *testing.T, request vo.RefundRequest, codeExp int, statusExp string) string {
-	resp, err := correctApi.Refund(context.Background(), request)
+func apiRefund(t *testing.T, api contracts.Api, request vo.RefundRequest, codeExp int, statusExp string) string {
+	resp, err := api.Refund(context.Background(), request)
 	if err != nil {
 		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
 	}
@@ -731,8 +793,8 @@ func apiRefund(t *testing.T, request vo.RefundRequest, codeExp int, statusExp st
 	return uidS
 }
 
-func apiVoid(t *testing.T, request vo.VoidRequest, codeExp int, statusExp string) string {
-	resp, err := correctApi.Void(context.Background(), request)
+func apiVoid(t *testing.T, api contracts.Api, request vo.VoidRequest, codeExp int, statusExp string) string {
+	resp, err := api.Void(context.Background(), request)
 	if err != nil {
 		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
 	}
@@ -772,8 +834,8 @@ func apiVoid(t *testing.T, request vo.VoidRequest, codeExp int, statusExp string
 	return uidS
 }
 
-func apiStatusByUid(t *testing.T, parentUid string, codeExp int, statusExp string) string {
-	resp, err := correctApi.StatusByUid(context.Background(), parentUid)
+func apiStatusByUid(t *testing.T, api contracts.Api, parentUid string, codeExp int, statusExp string) string {
+	resp, err := api.StatusByUid(context.Background(), parentUid)
 	if err != nil {
 		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
 	}
@@ -813,8 +875,8 @@ func apiStatusByUid(t *testing.T, parentUid string, codeExp int, statusExp strin
 	return uidS
 }
 
-func apiStatusByTrackingId(t *testing.T, trackingid string, codeExp int, statusExp string) string {
-	resp, err := correctApi.StatusByTrackingId(context.Background(), trackingid)
+func apiStatusByTrackingId(t *testing.T, api contracts.Api, trackingid string, codeExp int, statusExp string) string {
+	resp, err := api.StatusByTrackingId(context.Background(), trackingid)
 	if err != nil {
 		t.Fatal(sprintfExpAct("api.Authorization: return non nil error", nil, err))
 	}
@@ -911,24 +973,6 @@ func getTransactionsArray(body io.ReadCloser) ([]interface{}, error) {
 	}
 
 	return transaction, nil
-}
-
-func testMarshallRequest(t *testing.T, er string, startRequest func() (*http.Response, error)) {
-	// ignore response and error
-	go startRequest()
-
-	body := <-ch
-	defer body.Close()
-
-	b, err := io.ReadAll(body)
-
-	if err != nil {
-		fatalfWithExpectedActual(t, "ReadAll returned not nil value", nil, err)
-	}
-
-	if string(b) != er {
-		fatalfWithExpectedActual(t, "Strings aren't equal", er, string(b))
-	}
 }
 
 func fatalfWithExpectedActual(t *testing.T, msg string, er, ar interface{}) {
