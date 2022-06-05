@@ -9,7 +9,7 @@ type PaymentRequest struct {
 
 		//стоимость в минимальных денежных единицах.
 		//Например, $32.45 должна быть отправлена как 3245
-		Amount int64 `json:"amount"`
+		Amount Amount `json:"amount"`
 
 		//валюта в ISO-4217 формате, например USD
 		Currency string `json:"currency"`
@@ -54,7 +54,7 @@ type PaymentRequest struct {
 }
 
 // NewPaymentRequest creates PaymentRequest with mandatory fields
-func NewPaymentRequest(amount int64, currency, description, trackingId string, test bool, cc CreditCard) *PaymentRequest {
+func NewPaymentRequest(amount Amount, currency, description, trackingId string, test bool, cc CreditCard) *PaymentRequest {
 	r := &PaymentRequest{}
 
 	r.Request.Amount = amount

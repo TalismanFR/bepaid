@@ -7,7 +7,7 @@ type RefundRequest struct {
 		ParentUid string `json:"parent_uid"`
 
 		//сумма списания в минимальных денежных единицах, например 1000 для $10.00
-		Amount int64 `json:"amount"`
+		Amount Amount `json:"amount"`
 
 		//причина возврата. Максимальная длина: 255 символов
 		Reason string `json:"reason"`
@@ -20,7 +20,7 @@ type RefundRequest struct {
 }
 
 // NewRefundRequest creates RefundRequest with mandatory fields
-func NewRefundRequest(parentUid string, amount int64, reason string) *RefundRequest {
+func NewRefundRequest(parentUid string, amount Amount, reason string) *RefundRequest {
 	r := &RefundRequest{}
 
 	r.Request.ParentUid = parentUid

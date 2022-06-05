@@ -133,7 +133,7 @@ func (s *MarshalRequestTestSuite) Payment(t *testing.T) {
 		er   string
 	}{
 		{"defaultValue", P{}, `{"request":{"amount":0,"currency":"","description":"","tracking_id":"","test":false,"credit_card":{"number":"","verification_value":"","holder":"","exp_month":"","exp_year":"","skip_three_d_secure_verification":false}}}`},
-		{"requestConstructor", *vo.NewPaymentRequest(int64(1), "rub", "rub_1", "id1", true, *vo.NewCreditCard("5555", "123", "tim", "05", "2024")), `{"request":{"amount":1,"currency":"rub","description":"rub_1","tracking_id":"id1","test":true,"credit_card":{"number":"5555","verification_value":"123","holder":"tim","exp_month":"05","exp_year":"2024","skip_three_d_secure_verification":false}}}`},
+		{"requestConstructor", *vo.NewPaymentRequest(vo.Amount(1), "rub", "rub_1", "id1", true, *vo.NewCreditCard("5555", "123", "tim", "05", "2024")), `{"request":{"amount":1,"currency":"rub","description":"rub_1","tracking_id":"id1","test":true,"credit_card":{"number":"5555","verification_value":"123","holder":"tim","exp_month":"05","exp_year":"2024","skip_three_d_secure_verification":false}}}`},
 	}
 
 	for _, tc := range tests {
@@ -157,7 +157,7 @@ func (s *MarshalRequestTestSuite) Authorization(t *testing.T) {
 		er   string
 	}{
 		{"defaultValue", A{}, `{"request":{"amount":0,"currency":"","description":"","tracking_id":"","test":false,"credit_card":{"number":"","verification_value":"","holder":"","exp_month":"","exp_year":"","skip_three_d_secure_verification":false}}}`},
-		{"requestConstructor", *vo.NewAuthorizationRequest(int64(1), "rub", "rub_1", "id1", true, *vo.NewCreditCard("5555", "123", "tim", "05", "2024")), `{"request":{"amount":1,"currency":"rub","description":"rub_1","tracking_id":"id1","test":true,"credit_card":{"number":"5555","verification_value":"123","holder":"tim","exp_month":"05","exp_year":"2024","skip_three_d_secure_verification":false}}}`},
+		{"requestConstructor", *vo.NewAuthorizationRequest(vo.Amount(1), "rub", "rub_1", "id1", true, *vo.NewCreditCard("5555", "123", "tim", "05", "2024")), `{"request":{"amount":1,"currency":"rub","description":"rub_1","tracking_id":"id1","test":true,"credit_card":{"number":"5555","verification_value":"123","holder":"tim","exp_month":"05","exp_year":"2024","skip_three_d_secure_verification":false}}}`},
 	}
 
 	for _, tc := range tests {
@@ -181,7 +181,7 @@ func (s *MarshalRequestTestSuite) Capture(t *testing.T) {
 		er   string
 	}{
 		{"defaultValue", C{}, `{"request":{"parent_uid":"","amount":0}}`},
-		{"requestConstructor", *vo.NewCaptureRequest("id123", int64(63)), `{"request":{"parent_uid":"id123","amount":63}}`},
+		{"requestConstructor", *vo.NewCaptureRequest("id123", vo.Amount(63)), `{"request":{"parent_uid":"id123","amount":63}}`},
 	}
 
 	for _, tc := range tests {
@@ -205,7 +205,7 @@ func (s *MarshalRequestTestSuite) Void(t *testing.T) {
 		er   string
 	}{
 		{"defaultValue", V{}, `{"request":{"parent_uid":"","amount":0}}`},
-		{"requestConstructor", *vo.NewVoidRequest("id123", int64(63)), `{"request":{"parent_uid":"id123","amount":63}}`},
+		{"requestConstructor", *vo.NewVoidRequest("id123", vo.Amount(63)), `{"request":{"parent_uid":"id123","amount":63}}`},
 	}
 
 	for _, tc := range tests {
@@ -229,7 +229,7 @@ func (s *MarshalRequestTestSuite) Refund(t *testing.T) {
 		er   string
 	}{
 		{"defaultValue", R{}, `{"request":{"parent_uid":"","amount":0,"reason":""}}`},
-		{"requestConstructor", *vo.NewRefundRequest("id123", int64(63), "reason"), `{"request":{"parent_uid":"id123","amount":63,"reason":"reason"}}`},
+		{"requestConstructor", *vo.NewRefundRequest("id123", vo.Amount(63), "reason"), `{"request":{"parent_uid":"id123","amount":63,"reason":"reason"}}`},
 	}
 
 	for _, tc := range tests {
@@ -306,7 +306,7 @@ func (s *SingleRequestSuite) TestApi_Payment() {
 		status string
 	}{
 		{"test1",
-			*vo.NewPaymentRequest(int64(100), "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")).WithDuplicateCheck(false),
+			*vo.NewPaymentRequest(vo.Amount(100), "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")).WithDuplicateCheck(false),
 			http.StatusOK,
 			"successful",
 		},
@@ -359,12 +359,12 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCapture() {
 			status string
 		}
 		Capt struct {
-			c      C
-			code   int
-			status string
+			cWithUId func(string) C
+			code     int
+			status   string
 		}
 	)
-	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+	amount := vo.Amount(rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100)
 
 	tests := []struct {
 		name string
@@ -377,9 +377,10 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCapture() {
 				http.StatusOK,
 				"successful"},
 			Capt{
-				*vo.NewCaptureRequest("", amount),
+				func(uid string) C { return *vo.NewCaptureRequest(uid, amount) },
 				http.StatusOK,
-				"successful"},
+				"successful",
+			},
 		},
 	}
 
@@ -389,9 +390,9 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCapture() {
 			uid := apiAuthorization(s.T(), correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
 			s.T().Logf("A.Uid: %s", uid)
 
-			tc.capt.c.Request.ParentUid = uid
+			c := tc.capt.cWithUId(uid)
 
-			uid = apiCapture(s.T(), correctApi, tc.capt.c, tc.capt.code, tc.capt.status)
+			uid = apiCapture(s.T(), correctApi, c, tc.capt.code, tc.capt.status)
 			s.T().Logf("C.Uid: %s", uid)
 		})
 	}
@@ -411,7 +412,7 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationVoid() {
 			status string
 		}
 	)
-	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+	amount := vo.Amount(rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100)
 
 	tests := []struct {
 		name string
@@ -452,9 +453,9 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCaptureRefund() {
 			status string
 		}
 		Capt struct {
-			c      C
-			code   int
-			status string
+			cWithUId func(string) C
+			code     int
+			status   string
 		}
 		Refund struct {
 			r      R
@@ -462,7 +463,7 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCaptureRefund() {
 			status string
 		}
 	)
-	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+	amount := vo.Amount(rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100)
 
 	tests := []struct {
 		name   string
@@ -476,7 +477,7 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCaptureRefund() {
 				http.StatusOK,
 				"successful"},
 			Capt{
-				*vo.NewCaptureRequest("", amount),
+				func(uid string) C { return *vo.NewCaptureRequest(uid, amount) },
 				http.StatusOK,
 				"successful"},
 			Refund{
@@ -493,9 +494,9 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCaptureRefund() {
 			uid := apiAuthorization(s.T(), correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
 			s.T().Logf("A.Uid: %s", uid)
 
-			tc.capt.c.Request.ParentUid = uid
+			c := tc.capt.cWithUId(uid)
 
-			uid = apiCapture(s.T(), correctApi, tc.capt.c, tc.capt.code, tc.capt.status)
+			uid = apiCapture(s.T(), correctApi, c, tc.capt.code, tc.capt.status)
 			s.T().Logf("C.Uid: %s", uid)
 
 			tc.refund.r.Request.ParentUid = uid
@@ -519,7 +520,7 @@ func (s *SequentialRequestsTestSuite) TestApi_PaymentRefund() {
 			status string
 		}
 	)
-	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+	amount := vo.Amount(rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100)
 
 	tests := []struct {
 		name   string
@@ -565,7 +566,7 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationStatusByUid() {
 			status string
 		}
 	)
-	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+	amount := vo.Amount(rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100)
 
 	tests := []struct {
 		name    string
@@ -612,7 +613,7 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationStatusByTrackingId() 
 			status     string
 		}
 	)
-	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+	amount := vo.Amount(rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100)
 
 	tests := []struct {
 		name       string

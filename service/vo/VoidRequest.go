@@ -7,7 +7,7 @@ type VoidRequest struct {
 		ParentUid string `json:"parent_uid"`
 
 		//сумма списания в минимальных денежных единицах, например 1000 для $10.00
-		Amount int64 `json:"amount"`
+		Amount Amount `json:"amount"`
 
 		//(необязательный) true или false. Параметр управляет процессом проверки входящего запроса на уникальность.
 		//Если в течение 30 секунд придет запрос на списание средств с одинаковыми amount и parent_uid, то запрос будет отклонен.
@@ -17,7 +17,7 @@ type VoidRequest struct {
 }
 
 // NewVoidRequest creates VoidRequest with mandatory fields
-func NewVoidRequest(parentUid string, amount int64) *VoidRequest {
+func NewVoidRequest(parentUid string, amount Amount) *VoidRequest {
 	r := &VoidRequest{}
 
 	r.Request.ParentUid = parentUid
