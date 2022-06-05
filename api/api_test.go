@@ -133,7 +133,7 @@ func (s *MarshalRequestTestSuite) Payment(t *testing.T) {
 		er   string
 	}{
 		{"defaultValue", P{}, `{"request":{"amount":0,"currency":"","description":"","tracking_id":"","test":false,"credit_card":{"number":"","verification_value":"","holder":"","exp_month":"","exp_year":"","skip_three_d_secure_verification":false}}}`},
-		{"requestConstructor", *vo.NewPaymentRequest(int64(1), "rub", "rub_1", "id1", true, *vo.NewCreditCard("5555", "123", "tim", "05", "2024")), `{"request":{"amount":1,"currency":"rub","description":"rub_1","tracking_id":"id1","test":true,"credit_card":{"number":"5555","verification_value":"123","holder":"tim","exp_month":"05","exp_year":"2024","skip_three_d_secure_verification":false}}}`},
+		{"requestConstructor", *vo.NewPaymentRequest(vo.Amount(1), vo.RUB, "rub_1", "id1", true, *vo.NewCreditCard("5555", "123", "tim", "05", "2024")), `{"request":{"amount":1,"currency":"RUB","description":"rub_1","tracking_id":"id1","test":true,"credit_card":{"number":"5555","verification_value":"123","holder":"tim","exp_month":"05","exp_year":"2024","skip_three_d_secure_verification":false}}}`},
 	}
 
 	for _, tc := range tests {
@@ -157,7 +157,7 @@ func (s *MarshalRequestTestSuite) Authorization(t *testing.T) {
 		er   string
 	}{
 		{"defaultValue", A{}, `{"request":{"amount":0,"currency":"","description":"","tracking_id":"","test":false,"credit_card":{"number":"","verification_value":"","holder":"","exp_month":"","exp_year":"","skip_three_d_secure_verification":false}}}`},
-		{"requestConstructor", *vo.NewAuthorizationRequest(int64(1), "rub", "rub_1", "id1", true, *vo.NewCreditCard("5555", "123", "tim", "05", "2024")), `{"request":{"amount":1,"currency":"rub","description":"rub_1","tracking_id":"id1","test":true,"credit_card":{"number":"5555","verification_value":"123","holder":"tim","exp_month":"05","exp_year":"2024","skip_three_d_secure_verification":false}}}`},
+		{"requestConstructor", *vo.NewAuthorizationRequest(vo.Amount(1), vo.RUB, "rub_1", "id1", true, *vo.NewCreditCard("5555", "123", "tim", "05", "2024")), `{"request":{"amount":1,"currency":"RUB","description":"rub_1","tracking_id":"id1","test":true,"credit_card":{"number":"5555","verification_value":"123","holder":"tim","exp_month":"05","exp_year":"2024","skip_three_d_secure_verification":false}}}`},
 	}
 
 	for _, tc := range tests {
@@ -181,7 +181,7 @@ func (s *MarshalRequestTestSuite) Capture(t *testing.T) {
 		er   string
 	}{
 		{"defaultValue", C{}, `{"request":{"parent_uid":"","amount":0}}`},
-		{"requestConstructor", *vo.NewCaptureRequest("id123", int64(63)), `{"request":{"parent_uid":"id123","amount":63}}`},
+		{"requestConstructor", *vo.NewCaptureRequest("id123", vo.Amount(63)), `{"request":{"parent_uid":"id123","amount":63}}`},
 	}
 
 	for _, tc := range tests {
@@ -205,7 +205,7 @@ func (s *MarshalRequestTestSuite) Void(t *testing.T) {
 		er   string
 	}{
 		{"defaultValue", V{}, `{"request":{"parent_uid":"","amount":0}}`},
-		{"requestConstructor", *vo.NewVoidRequest("id123", int64(63)), `{"request":{"parent_uid":"id123","amount":63}}`},
+		{"requestConstructor", *vo.NewVoidRequest("id123", vo.Amount(63)), `{"request":{"parent_uid":"id123","amount":63}}`},
 	}
 
 	for _, tc := range tests {
@@ -229,7 +229,7 @@ func (s *MarshalRequestTestSuite) Refund(t *testing.T) {
 		er   string
 	}{
 		{"defaultValue", R{}, `{"request":{"parent_uid":"","amount":0,"reason":""}}`},
-		{"requestConstructor", *vo.NewRefundRequest("id123", int64(63), "reason"), `{"request":{"parent_uid":"id123","amount":63,"reason":"reason"}}`},
+		{"requestConstructor", *vo.NewRefundRequest("id123", vo.Amount(63), "reason"), `{"request":{"parent_uid":"id123","amount":63,"reason":"reason"}}`},
 	}
 
 	for _, tc := range tests {
@@ -284,7 +284,7 @@ func (s *SingleRequestSuite) TestApi_Authorization() {
 		status string
 	}{
 		{"test1",
-			*vo.NewAuthorizationRequest(101, "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+			*vo.NewAuthorizationRequest(101, vo.RUB, "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
 			http.StatusOK,
 			"successful",
 		},
@@ -306,7 +306,7 @@ func (s *SingleRequestSuite) TestApi_Payment() {
 		status string
 	}{
 		{"test1",
-			*vo.NewPaymentRequest(int64(100), "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")).WithDuplicateCheck(false),
+			*vo.NewPaymentRequest(vo.Amount(100), vo.RUB, "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")).WithDuplicateCheck(false),
 			http.StatusOK,
 			"successful",
 		},
@@ -359,12 +359,12 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCapture() {
 			status string
 		}
 		Capt struct {
-			c      C
-			code   int
-			status string
+			cWithUId func(string) C
+			code     int
+			status   string
 		}
 	)
-	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+	amount := vo.Amount(rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100)
 
 	tests := []struct {
 		name string
@@ -373,13 +373,14 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCapture() {
 	}{
 		{"positiveTest1",
 			Auth{
-				*vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+				*vo.NewAuthorizationRequest(amount, vo.RUB, "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
 				http.StatusOK,
 				"successful"},
 			Capt{
-				*vo.NewCaptureRequest("", amount),
+				func(uid string) C { return *vo.NewCaptureRequest(uid, amount) },
 				http.StatusOK,
-				"successful"},
+				"successful",
+			},
 		},
 	}
 
@@ -389,9 +390,9 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCapture() {
 			uid := apiAuthorization(s.T(), correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
 			s.T().Logf("A.Uid: %s", uid)
 
-			tc.capt.c.Request.ParentUid = uid
+			c := tc.capt.cWithUId(uid)
 
-			uid = apiCapture(s.T(), correctApi, tc.capt.c, tc.capt.code, tc.capt.status)
+			uid = apiCapture(s.T(), correctApi, c, tc.capt.code, tc.capt.status)
 			s.T().Logf("C.Uid: %s", uid)
 		})
 	}
@@ -406,12 +407,12 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationVoid() {
 			status string
 		}
 		Void struct {
-			v      V
-			code   int
-			status string
+			vWithUid func(string) V
+			code     int
+			status   string
 		}
 	)
-	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+	amount := vo.Amount(rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100)
 
 	tests := []struct {
 		name string
@@ -420,11 +421,11 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationVoid() {
 	}{
 		{"positiveTest1",
 			Auth{
-				*vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+				*vo.NewAuthorizationRequest(amount, vo.RUB, "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
 				http.StatusOK,
 				"successful"},
 			Void{
-				*vo.NewVoidRequest("", amount),
+				func(uid string) V { return *vo.NewVoidRequest(uid, amount) },
 				http.StatusOK,
 				"successful"},
 		},
@@ -436,9 +437,9 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationVoid() {
 			uid := apiAuthorization(s.T(), correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
 			s.T().Logf("A.Uid: %s", uid)
 
-			tc.void.v.Request.ParentUid = uid
+			v := tc.void.vWithUid(uid)
 
-			uid = apiVoid(s.T(), correctApi, tc.void.v, tc.void.code, tc.void.status)
+			uid = apiVoid(s.T(), correctApi, v, tc.void.code, tc.void.status)
 			s.T().Logf("V.Uid: %s", uid)
 		})
 	}
@@ -452,17 +453,17 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCaptureRefund() {
 			status string
 		}
 		Capt struct {
-			c      C
-			code   int
-			status string
+			cWithUId func(string) C
+			code     int
+			status   string
 		}
 		Refund struct {
-			r      R
-			code   int
-			status string
+			rWithUid func(string) R
+			code     int
+			status   string
 		}
 	)
-	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+	amount := vo.Amount(rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100)
 
 	tests := []struct {
 		name   string
@@ -472,15 +473,15 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCaptureRefund() {
 	}{
 		{"positiveTest1",
 			Auth{
-				*vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+				*vo.NewAuthorizationRequest(amount, vo.RUB, "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
 				http.StatusOK,
 				"successful"},
 			Capt{
-				*vo.NewCaptureRequest("", amount),
+				func(uid string) C { return *vo.NewCaptureRequest(uid, amount) },
 				http.StatusOK,
 				"successful"},
 			Refund{
-				*vo.NewRefundRequest("", amount, "give me my money back"),
+				func(uid string) R { return *vo.NewRefundRequest(uid, amount, "give me my money back") },
 				http.StatusOK,
 				"successful",
 			},
@@ -493,14 +494,14 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationCaptureRefund() {
 			uid := apiAuthorization(s.T(), correctApi, tc.auth.a, tc.auth.code, tc.auth.status)
 			s.T().Logf("A.Uid: %s", uid)
 
-			tc.capt.c.Request.ParentUid = uid
+			c := tc.capt.cWithUId(uid)
 
-			uid = apiCapture(s.T(), correctApi, tc.capt.c, tc.capt.code, tc.capt.status)
+			uid = apiCapture(s.T(), correctApi, c, tc.capt.code, tc.capt.status)
 			s.T().Logf("C.Uid: %s", uid)
 
-			tc.refund.r.Request.ParentUid = uid
+			r := tc.refund.rWithUid(uid)
 
-			uid = apiRefund(s.T(), correctApi, tc.refund.r, tc.refund.code, tc.refund.status)
+			uid = apiRefund(s.T(), correctApi, r, tc.refund.code, tc.refund.status)
 			s.T().Logf("R.Uid: %s", uid)
 		})
 	}
@@ -514,12 +515,12 @@ func (s *SequentialRequestsTestSuite) TestApi_PaymentRefund() {
 			status string
 		}
 		Refund struct {
-			r      R
-			code   int
-			status string
+			rWithUid func(string) R
+			code     int
+			status   string
 		}
 	)
-	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+	amount := vo.Amount(rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100)
 
 	tests := []struct {
 		name   string
@@ -528,11 +529,11 @@ func (s *SequentialRequestsTestSuite) TestApi_PaymentRefund() {
 	}{
 		{"positiveTest1",
 			Paym{
-				*vo.NewPaymentRequest(amount, "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+				*vo.NewPaymentRequest(amount, vo.RUB, "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
 				http.StatusOK,
 				"successful"},
 			Refund{
-				*vo.NewRefundRequest("", amount, "give me my money back"),
+				func(uid string) R { return *vo.NewRefundRequest(uid, amount, "give me my money back") },
 				http.StatusOK,
 				"successful"},
 		},
@@ -544,9 +545,9 @@ func (s *SequentialRequestsTestSuite) TestApi_PaymentRefund() {
 			uid := apiPayment(s.T(), correctApi, tc.paym.p, tc.paym.code, tc.paym.status)
 			s.T().Logf("A.Uid: %s", uid)
 
-			tc.refund.r.Request.ParentUid = uid
+			r := tc.refund.rWithUid(uid)
 
-			uid = apiRefund(s.T(), correctApi, tc.refund.r, tc.refund.code, tc.refund.status)
+			uid = apiRefund(s.T(), correctApi, r, tc.refund.code, tc.refund.status)
 			s.T().Logf("R.Uid: %s", uid)
 		})
 	}
@@ -565,7 +566,7 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationStatusByUid() {
 			status string
 		}
 	)
-	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+	amount := vo.Amount(rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100)
 
 	tests := []struct {
 		name    string
@@ -574,7 +575,7 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationStatusByUid() {
 	}{
 		{"positiveTest1",
 			Auth{
-				*vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+				*vo.NewAuthorizationRequest(amount, vo.RUB, "it's description", "mytrackingid", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
 				http.StatusOK,
 				"successful"},
 			StatusUid{
@@ -612,7 +613,7 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationStatusByTrackingId() 
 			status     string
 		}
 	)
-	amount := rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100
+	amount := vo.Amount(rand.New(rand.NewSource(time.Now().Unix())).Int63() % 100)
 
 	tests := []struct {
 		name       string
@@ -621,7 +622,7 @@ func (s *SequentialRequestsTestSuite) TestApi_AuthorizationStatusByTrackingId() 
 	}{
 		{"positiveTest1",
 			Auth{
-				*vo.NewAuthorizationRequest(amount, "RUB", "it's description", "mytrackingid5678", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
+				*vo.NewAuthorizationRequest(amount, vo.RUB, "it's description", "mytrackingid5678", true, *vo.NewCreditCard("4200000000000000", "123", "tim", "01", "2024")),
 				http.StatusOK,
 				"successful"},
 			StatusTrId{
