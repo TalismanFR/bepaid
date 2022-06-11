@@ -1,12 +1,12 @@
 package api
 
 import (
-	"bepaid-sdk/api/contracts"
-	"bepaid-sdk/service/vo"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/TalismanFR/bepaid/api/contracts"
+	"github.com/TalismanFR/bepaid/service/vo"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/suite"
 	"io"

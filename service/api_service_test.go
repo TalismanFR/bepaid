@@ -1,11 +1,11 @@
 package service
 
 import (
-	"bepaid-sdk/service/vo"
-	"bepaid-sdk/testdata"
 	"bytes"
 	"context"
 	"errors"
+	"github.com/TalismanFR/bepaid/service/vo"
+	"github.com/TalismanFR/bepaid/testdata"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"

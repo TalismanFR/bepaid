@@ -5,8 +5,8 @@
 package testdata
 
 import (
-	vo "bepaid-sdk/service/vo"
 	context "context"
+	vo "github.com/TalismanFR/bepaid/service/vo"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"

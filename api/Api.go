@@ -1,11 +1,11 @@
 package api
 
 import (
-	"bepaid-sdk/service/vo"
 	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/TalismanFR/bepaid/service/vo"
 	"io"
 	"net/http"
 	"strings"

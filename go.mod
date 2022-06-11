@@ -1,4 +1,4 @@
-module bepaid-sdk
+module github.com/TalismanFR/bepaid
 
 go 1.17
 

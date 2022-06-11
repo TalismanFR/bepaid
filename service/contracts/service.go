@@ -1,8 +1,8 @@
 package contracts
 
 import (
-	"bepaid-sdk/service/vo"
 	"context"
+	"github.com/TalismanFR/bepaid/service/vo"
 )
 
 type ApiService interface {

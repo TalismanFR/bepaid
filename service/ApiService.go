@@ -1,12 +1,12 @@
 package service
 
 import (
-	"bepaid-sdk/api/contracts"
-	"bepaid-sdk/service/vo"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/TalismanFR/bepaid/api/contracts"
+	"github.com/TalismanFR/bepaid/service/vo"
 	"io"
 	"log"
 )

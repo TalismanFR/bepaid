@@ -6,7 +6,7 @@ package testdata
 
 //
 //import (
-//	vo "bepaid-sdk/service/vo"
+//	vo "github.com/TalismanFR/bepaid/service/vo"
 //	context "context"
 //	reflect "reflect"
 //
