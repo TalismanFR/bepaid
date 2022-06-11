@@ -43,13 +43,13 @@ func TestApiService_Capture(t *testing.T) {
 	r := ioutil.NopCloser(bytes.NewReader([]byte(json_req_1)))
 	capture := testdata.NewMockApi(ctrl)
 
-	capture.EXPECT().Capture(context.Background(), *vo.NewCaptureRequest(50, "1-310b0da80b")).Return(http.Response{
+	capture.EXPECT().Capture(context.Background(), *vo.NewCaptureRequest("1-310b0da80b", vo.Amount(50))).Return(&http.Response{
 		StatusCode: 200,
 		Body:       r,
 	}, nil)
 
 	captureTest := NewApiService(capture)
-	response, err := captureTest.Capture(context.Background(), *vo.NewCaptureRequest(50, "1-310b0da80b"))
+	response, err := captureTest.Capture(context.Background(), *vo.NewCaptureRequest("1-310b0da80b", vo.Amount(50)))
 
 	assert.Nil(t, err)
 	assert.NotNil(t, response)
@@ -65,13 +65,13 @@ func TestApiService_Capture2(t *testing.T) {
 	r := ioutil.NopCloser(bytes.NewReader([]byte(json_req_1)))
 	capture := testdata.NewMockApi(ctrl)
 
-	capture.EXPECT().Capture(context.Background(), *vo.NewCaptureRequest(50, "1-310b0da80b")).Return(http.Response{
+	capture.EXPECT().Capture(context.Background(), *vo.NewCaptureRequest("1-310b0da80b", vo.Amount(50))).Return(&http.Response{
 		StatusCode: 200,
 		Body:       r,
 	}, errors.New("error message"))
 
 	captureTest := NewApiService(capture)
-	_, err := captureTest.Capture(context.Background(), *vo.NewCaptureRequest(50, "1-310b0da80b"))
+	_, err := captureTest.Capture(context.Background(), *vo.NewCaptureRequest("1-310b0da80b", vo.Amount(50)))
 
 	assert.NotNil(t, err)
 	assert.Equal(t, "error message", err.Error())
@@ -84,13 +84,13 @@ func TestApiService_Capture3(t *testing.T) {
 	r := ioutil.NopCloser(bytes.NewReader([]byte(json_req_1)))
 	capture := testdata.NewMockApi(ctrl)
 
-	capture.EXPECT().Capture(context.Background(), *vo.NewCaptureRequest(50, "1-310b0da80b")).Return(http.Response{
+	capture.EXPECT().Capture(context.Background(), *vo.NewCaptureRequest("1-310b0da80b", vo.Amount(50))).Return(&http.Response{
 		StatusCode: 100,
 		Body:       r,
 	}, nil)
 
 	captureTest := NewApiService(capture)
-	_, err := captureTest.Capture(context.Background(), *vo.NewCaptureRequest(50, "1-310b0da80b"))
+	_, err := captureTest.Capture(context.Background(), *vo.NewCaptureRequest("1-310b0da80b", vo.Amount(50)))
 
 	assert.NotNil(t, err)
 	assert.Equal(t, "Error, status code: 100", err.Error())

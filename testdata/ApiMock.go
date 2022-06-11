@@ -36,32 +36,107 @@ func (m *MockApi) EXPECT() *MockApiMockRecorder {
 	return m.recorder
 }
 
-// Authorizations mocks base method.
-func (m *MockApi) Authorizations(ctx context.Context, request *vo.AuthorizationRequest) (*http.Response, error) {
+// Authorization mocks base method.
+func (m *MockApi) Authorization(ctx context.Context, authorization vo.AuthorizationRequest) (*http.Response, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Authorizations", ctx, request)
+	ret := m.ctrl.Call(m, "Authorization", ctx, authorization)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Authorizations indicates an expected call of Authorizations.
-func (mr *MockApiMockRecorder) Authorizations(ctx, request interface{}) *gomock.Call {
+// Authorization indicates an expected call of Authorization.
+func (mr *MockApiMockRecorder) Authorization(ctx, authorization interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Authorizations", reflect.TypeOf((*MockApi)(nil).Authorizations), ctx, request)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Authorization", reflect.TypeOf((*MockApi)(nil).Authorization), ctx, authorization)
 }
 
-// Captures mocks base method.
-func (m *MockApi) Captures(ctx context.Context, capture *vo.CaptureRequest) (*http.Response, error) {
+// Capture mocks base method.
+func (m *MockApi) Capture(ctx context.Context, capture vo.CaptureRequest) (*http.Response, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Captures", ctx, capture)
+	ret := m.ctrl.Call(m, "Capture", ctx, capture)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Captures indicates an expected call of Captures.
-func (mr *MockApiMockRecorder) Captures(ctx, capture interface{}) *gomock.Call {
+// Capture indicates an expected call of Capture.
+func (mr *MockApiMockRecorder) Capture(ctx, capture interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Captures", reflect.TypeOf((*MockApi)(nil).Captures), ctx, capture)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Capture", reflect.TypeOf((*MockApi)(nil).Capture), ctx, capture)
+}
+
+// Payment mocks base method.
+func (m *MockApi) Payment(ctx context.Context, payment vo.PaymentRequest) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Payment", ctx, payment)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Payment indicates an expected call of Payment.
+func (mr *MockApiMockRecorder) Payment(ctx, payment interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Payment", reflect.TypeOf((*MockApi)(nil).Payment), ctx, payment)
+}
+
+// Refund mocks base method.
+func (m *MockApi) Refund(ctx context.Context, refund vo.RefundRequest) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Refund", ctx, refund)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Refund indicates an expected call of Refund.
+func (mr *MockApiMockRecorder) Refund(ctx, refund interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refund", reflect.TypeOf((*MockApi)(nil).Refund), ctx, refund)
+}
+
+// StatusByTrackingId mocks base method.
+func (m *MockApi) StatusByTrackingId(ctx context.Context, trackingId string) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StatusByTrackingId", ctx, trackingId)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StatusByTrackingId indicates an expected call of StatusByTrackingId.
+func (mr *MockApiMockRecorder) StatusByTrackingId(ctx, trackingId interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StatusByTrackingId", reflect.TypeOf((*MockApi)(nil).StatusByTrackingId), ctx, trackingId)
+}
+
+// StatusByUid mocks base method.
+func (m *MockApi) StatusByUid(ctx context.Context, uid string) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StatusByUid", ctx, uid)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StatusByUid indicates an expected call of StatusByUid.
+func (mr *MockApiMockRecorder) StatusByUid(ctx, uid interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StatusByUid", reflect.TypeOf((*MockApi)(nil).StatusByUid), ctx, uid)
+}
+
+// Void mocks base method.
+func (m *MockApi) Void(ctx context.Context, void vo.VoidRequest) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Void", ctx, void)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Void indicates an expected call of Void.
+func (mr *MockApiMockRecorder) Void(ctx, void interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Void", reflect.TypeOf((*MockApi)(nil).Void), ctx, void)
 }
