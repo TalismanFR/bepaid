@@ -38,9 +38,14 @@ type TransactionResponse struct {
 	} `json:"response"`
 }
 
+func (tr *TransactionResponse) Uid() string {
+	return tr.Transaction.Uid
+}
+
 func (tr *TransactionResponse) IsSuccess() bool {
 	return tr.Transaction.Status == success
 }
+
 func (tr *TransactionResponse) IsFailed() bool {
 	return tr.Transaction.Status == failed
 }
