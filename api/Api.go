@@ -12,12 +12,12 @@ import (
 )
 
 const (
-	payments       = "/transactions/payments"
-	authorizations = "/transactions/authorizations"
-	captures       = "/transactions/captures"
-	voids          = "/transactions/voids"
-	refunds        = "/transactions/refunds"
-
+	payments         = "/transactions/payments"
+	authorizations   = "/transactions/authorizations"
+	captures         = "/transactions/captures"
+	voids            = "/transactions/voids"
+	refunds          = "/transactions/refunds"
+	statusUid        = "/transactions/"
 	statusTrackingId = "/v2/transactions/tracking_id/"
 )
 
@@ -27,19 +27,19 @@ type Api struct {
 	auth    string
 }
 
-func (a *Api) StatusByUid(ctx context.Context, uid string) (*http.Response, error) {
-	return a.sendRequest(ctx, http.MethodGet, uid, nil)
-}
-
-func (a *Api) StatusByTrackingId(ctx context.Context, trackingId string) (*http.Response, error) {
-	return a.sendRequest(ctx, http.MethodGet, statusTrackingId+trackingId, nil)
-}
-
 func NewApi(client *http.Client, baseUrl, username, password string) *Api {
 	return &Api{
 		client:  client,
 		baseUrl: strings.TrimSuffix(baseUrl, "/"),
 		auth:    "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))}
+}
+
+func (a *Api) StatusByUid(ctx context.Context, uid string) (*http.Response, error) {
+	return a.sendRequest(ctx, http.MethodGet, statusUid+uid, nil)
+}
+
+func (a *Api) StatusByTrackingId(ctx context.Context, trackingId string) (*http.Response, error) {
+	return a.sendRequest(ctx, http.MethodGet, statusTrackingId+trackingId, nil)
 }
 
 func (a *Api) Payment(ctx context.Context, payment vo.PaymentRequest) (*http.Response, error) {

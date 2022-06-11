@@ -1,33 +1,56 @@
 package vo
 
+import (
+	"encoding/json"
+)
+
 type CaptureRequest struct {
-	Request struct {
 
-		//UID транзакции авторизации
-		ParentUid string `json:"parent_uid"`
+	//UID транзакции авторизации
+	parentUid string
 
-		//сумма списания в минимальных денежных единицах, например 1000 для $10.00
-		Amount int64 `json:"amount"`
+	//сумма списания в минимальных денежных единицах, например 1000 для $10.00
+	amount Amount
 
-		//(необязательный) true или false. Параметр управляет процессом проверки входящего запроса на уникальность.
-		//Если в течение 30 секунд придет запрос на списание средств с одинаковыми amount и parent_uid, то запрос будет отклонен.
-		//По умолчанию, этот параметр имеет значение true
-		DuplicateCheck *bool `json:"duplicate_check,omitempty"`
-	} `json:"request"`
+	//(необязательный) true или false. Параметр управляет процессом проверки входящего запроса на уникальность.
+	//Если в течение 30 секунд придет запрос на списание средств с одинаковыми amount и parent_uid, то запрос будет отклонен.
+	//По умолчанию, этот параметр имеет значение true
+	duplicateCheck *bool
+}
+
+func (cr *CaptureRequest) ParentUid() string {
+	return cr.parentUid
+}
+
+func (cr *CaptureRequest) Amount() Amount {
+	return cr.amount
+}
+
+func (cr *CaptureRequest) DuplicateCheck() *bool {
+	return cr.duplicateCheck
+}
+
+func (cr CaptureRequest) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Request interface{} `json:"request"`
+	}{struct {
+		ParentUid      string `json:"parent_uid"`
+		Amount         Amount `json:"amount"`
+		DuplicateCheck *bool  `json:"duplicate_check,omitempty"`
+	}{cr.parentUid, cr.amount, cr.duplicateCheck}})
 }
 
 // NewCaptureRequest creates CaptureRequest with mandatory fields
+func NewCaptureRequest(parentUid string, amount Amount) *CaptureRequest {
+	cr := &CaptureRequest{}
 
-func NewCaptureRequest(parentUid string, amount int64) *CaptureRequest {
-	r := &CaptureRequest{}
+	cr.parentUid = parentUid
+	cr.amount = amount
 
-	r.Request.ParentUid = parentUid
-	r.Request.Amount = amount
-
-	return r
+	return cr
 }
 
 func (cr *CaptureRequest) WithDuplicateCheck(duplicateCheck bool) *CaptureRequest {
-	cr.Request.DuplicateCheck = &duplicateCheck
+	cr.duplicateCheck = &duplicateCheck
 	return cr
 }
