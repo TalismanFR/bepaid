@@ -98,3 +98,7 @@ func marshalRequest(request interface{}) (io.Reader, error) {
 	}
 	return bytes.NewReader(b), nil
 }
+
+func (a Api) GetUrl() string {
+	return a.baseUrl
+}
