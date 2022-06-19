@@ -30,6 +30,8 @@ func (a ApiService) Authorizations(ctx context.Context, authorizationRequest vo.
 
 		}
 	}(resp.Body)
+
+	// TODO: parsing resp.Body into TransactionResponse
 	var result vo.TransactionResponse
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
@@ -54,6 +56,7 @@ func (a ApiService) Capture(ctx context.Context, captureRequest vo.CaptureReques
 		}
 	}(resp.Body)
 
+	// TODO: parsing resp.Body into TransactionResponse
 	var result vo.TransactionResponse
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
